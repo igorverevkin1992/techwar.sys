@@ -1,28 +1,35 @@
-# MEDIAWAR.CORE V3.3
+# TECHWAR.SYS V3.4
 
-Autonomous AI video production system powered by a **Chain of Agents** architecture. Generates retention-optimized, bilingual (EN/RU) video scripts through a sequential pipeline of specialized AI agents backed by Google Gemini.
+Autonomous AI video production system powered by a **Chain of Agents** architecture. Generates retention-optimized video scripts through a sequential pipeline of specialized AI agents backed by Google Gemini.
+
+**Channel:** TECH.WAR — an English-language analytical channel about how algorithms, AI, and IT corporations construct geopolitical meanings and manage public attention.
+
+**Three Pillars:**
+1. **Algorithms as Editors of Reality** — How recommendation systems (YouTube, TikTok, X) create parallel realities and amplify radicalization
+2. **AI Politics and Ethics** — Training data opacity, AI censorship, deepfakes as tools for rewriting events in real time
+3. **Corporations as Political Actors** — Platform rules that shape elections, shadow bans, data colonialism, and the accountability vacuum
 
 ## Architecture
 
-The system runs 5 agents sequentially, each building on the previous output:
+The system runs agents sequentially, each building on the previous output:
 
 ```
 Scout ──> Radar ──> Analyst ──> Architect ──> Writer
   │         │          │           │            │
-  │         │          │           │            └─ Final bilingual script (60+ blocks)
+  │         │          │           │            └─ Final English script (60+ blocks)
   │         │          │           └─ Video structure & retention map
   │         │          └─ Fact-checked research dossier (Google Search)
-  │         └─ Viral angle identification
-  └─ Global news scanning (Google Search)
+  │         └─ Search directive generation
+  └─ Tech/AI/platform topic scanning (Google Search)
 ```
 
 | Agent | Role | Output |
 |-------|------|--------|
-| **Scout** | Scans current news via Google Search | 4 topic suggestions with hooks |
-| **Radar** | Applies viral methodology to the topic | 3 video hypotheses |
-| **Analyst** | Fact-checks claims via Google Search | Structured research dossier (JSON) |
-| **Architect** | Designs retention structure | Timecoded 5-block blueprint |
-| **Writer** | Generates full production script | 60+ blocks, EN audio + RU translation |
+| **Scout** | Scans current tech/AI/platform news via Google Search | 4 topic suggestions with hooks |
+| **Radar** | Generates targeted search directives for primary evidence | 3 search directives |
+| **Analyst** | Finds system-level evidence via Google Search | Structured research dossier (JSON) |
+| **Architect** | Designs retention structure (System Anatomy formula) | Timecoded 6-block blueprint |
+| **Writer** | Generates full production script | 60+ blocks, English audio |
 
 ### Steppable Mode
 
@@ -49,8 +56,8 @@ When enabled, the pipeline pauses between agents to allow manual review and edit
 ### Installation
 
 ```bash
-git clone https://github.com/igorverevkin1992/mediawar.core-v3.0.git
-cd mediawar.core-v3.0
+git clone <repo-url>
+cd techwar.sys
 npm install --legacy-peer-deps
 ```
 
@@ -63,26 +70,12 @@ cp .env.example .env
 ```
 
 ```env
-GEMINI_API_KEY=your_gemini_api_key_here
+VITE_GOOGLE_API_KEY=your_gemini_api_key_here
 SUPABASE_URL=your_supabase_url_here
 SUPABASE_KEY=your_supabase_anon_key_here
 ```
 
 > **Note:** Supabase is optional. Without it, the app works fully but doesn't persist history between sessions.
-
-### Supabase Table Setup
-
-If using Supabase, create the history table:
-
-```sql
-CREATE TABLE mediawar_history (
-  id BIGSERIAL PRIMARY KEY,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  topic TEXT NOT NULL,
-  model TEXT NOT NULL,
-  script JSONB NOT NULL
-);
-```
 
 ### Run
 
@@ -107,7 +100,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ## Project Structure
 
 ```
-mediawar.core-v3.0/
+techwar.sys/
 ├── components/
 │   ├── AgentLog.tsx          # Terminal-style log display
 │   ├── ErrorBoundary.tsx     # React error boundary with recovery UI
@@ -145,9 +138,7 @@ The generated script can be exported in three formats:
 |--------|----------|----------|
 | **Dossier (.doc)** | Radar + Analyst + Architect output | Research review |
 | **Script (.doc)** | Full timecoded script with storyboard images | Production handoff |
-| **Editor Task (.csv)** | Timecodes, visual cues, EN/RU audio columns | Video editor worksheet |
-
-All exports support Cyrillic (UTF-8 with BOM).
+| **Editor Task (.csv)** | Timecodes, visual cues, audio columns | Video editor worksheet |
 
 ## Supported Models
 
@@ -155,9 +146,6 @@ All exports support Cyrillic (UTF-8 with BOM).
 |-------|----------|----------|
 | Gemini 3.0 Pro | Google Search, thinking | Highest quality output |
 | Gemini 3.0 Flash | Google Search, thinking | Fast iteration |
-| Gemini 2.5 Flash | Thinking budget | Balanced quality/speed |
-| Gemini 2.0 Flash | Stable, proven | Reliable production |
-| Gemini 1.5 Flash | Legacy | Fallback |
 
 > Google Search tool is only available on Gemini 3.x models. Other models use prompt-only generation.
 
@@ -167,7 +155,7 @@ GitHub Actions runs on every push and PR:
 
 1. **Type check** — `tsc --noEmit`
 2. **Lint** — ESLint with `no-explicit-any` enforced
-3. **Test** — Vitest (17 tests)
+3. **Test** — Vitest
 4. **Build** — Vite production build
 
 ## License

@@ -101,7 +101,7 @@ function App() {
     loadHistoryFromServer();
     // Check for saved draft on startup
     try {
-      const saved = localStorage.getItem('narrative_war_draft');
+      const saved = localStorage.getItem('tech_war_draft');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed?.finalScript?.length || parsed?.researchDossier || parsed?.structureMap) {
@@ -129,7 +129,7 @@ function App() {
           seoPackage: state.seoPackage,
           savedAt: new Date().toISOString(),
         };
-        localStorage.setItem('narrative_war_draft', JSON.stringify(draft));
+        localStorage.setItem('tech_war_draft', JSON.stringify(draft));
       } catch { /* storage full or unavailable */ }
     }, 1500);
   }, [state.finalScript, state.researchDossier, state.structureMap, state.topic, state.projectType, state.scriptOutline, state.radarOutput, state.thumbnailConcept, state.seoPackage]);
@@ -151,7 +151,7 @@ function App() {
 
   const handleRestoreDraft = useCallback(() => {
     try {
-      const saved = localStorage.getItem('narrative_war_draft');
+      const saved = localStorage.getItem('tech_war_draft');
       if (!saved) return;
       const draft = JSON.parse(saved);
       dispatch({ type: 'MERGE', partial: {
@@ -170,7 +170,7 @@ function App() {
   }, [dispatch]);
 
   const handleDiscardDraft = useCallback(() => {
-    localStorage.removeItem('narrative_war_draft');
+    localStorage.removeItem('tech_war_draft');
     setShowDraftRestore(false);
   }, []);
 
@@ -202,7 +202,7 @@ function App() {
           <div className="flex items-center gap-3">
             <div className="w-3 h-3 bg-mw-red rounded-full animate-pulse shadow-[0_0_10px_#dc2626]" />
             <h1 className="text-xl font-bold tracking-widest text-white">
-              NARRATIVE<span className="text-mw-red">.WAR</span>{' '}
+              TECH<span className="text-mw-red">.WAR</span>{' '}
               <span className="text-xs text-mw-slate ml-2 font-mono border border-mw-slate/50 px-1 rounded">V{APP_VERSION}</span>
             </h1>
           </div>
@@ -304,7 +304,7 @@ function App() {
               <div className="mb-3 bg-black/30 border border-mw-slate/20 rounded p-3 flex flex-col gap-2">
                 {/* Category filter */}
                 <div className="flex flex-wrap gap-1">
-                  {(['all', 'geopolitics', 'business', 'history', 'crime', 'technology', 'society'] as const).map(cat => (
+                  {(['all', 'algorithm', 'ai_ethics', 'platform_power', 'corporate_state'] as const).map(cat => (
                     <button
                       key={cat}
                       onClick={() => setTemplateCategory(cat)}
@@ -495,7 +495,7 @@ function App() {
                         }
                       }
                       if (current?.audioScript) blocks.push({ timecode: '', visualCue: '', overlayFX: '', audioScript: '', russianScript: '', blockType: 'BODY', ...current });
-                      if (!blocks.length) throw new Error('No script blocks found in document. Make sure the file was exported from Narrative.War.');
+                      if (!blocks.length) throw new Error('No script blocks found in document. Make sure the file was exported from Tech.War.');
                       return blocks;
                     };
 
@@ -545,7 +545,7 @@ function App() {
                                   overlayFX: '',
                                 };
                               }).filter(b => b.audioScript);
-                              if (!blocks.length) throw new Error('No script blocks found in HTML document');
+                              if (!blocks.length) throw new Error('No script blocks found in HTML document. Make sure the file was exported from Tech.War.');
                               importBlocks(blocks);
                             } else {
                               // Word stripped CSS classes — extract text from each leaf block element

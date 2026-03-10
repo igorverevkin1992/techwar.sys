@@ -11,7 +11,7 @@ from scripts.style_search import get_style_examples
 PROXY_RETRY_COUNT = 3
 PROXY_RETRY_BASE_MS = 1500  # ms, doubles each attempt
 
-app = FastAPI(title="NARRATIVE.WAR Backend", version="3.3")
+app = FastAPI(title="TECH.WAR Backend", version="3.3")
 
 app.add_middleware(
     CORSMiddleware,
@@ -36,7 +36,7 @@ class TopicRequest(BaseModel):
 
 @app.get("/")
 def read_root():
-    return {"status": "NARRATIVE.WAR Backend is running", "version": "3.3"}
+    return {"status": "TECH.WAR Backend is running", "version": "3.3"}
 
 
 @app.get("/api/prompts")

@@ -204,7 +204,7 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
       ];
       const children: Paragraph[] = [
         new Paragraph({ text: `INTELLIGENCE DOSSIER: ${topic}`, heading: HeadingLevel.HEADING_1 }),
-        new Paragraph({ children: [new TextRun({ text: `NARRATIVE.WAR V${APP_VERSION} // RESEARCH DATA ONLY`, bold: true })] }),
+        new Paragraph({ children: [new TextRun({ text: `TECH.WAR V${APP_VERSION} // RESEARCH DATA ONLY`, bold: true })] }),
         new Paragraph({ text: `Generated: ${new Date().toLocaleString()}` }),
         new Paragraph({ text: '' }),
       ];
@@ -228,7 +228,7 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
       setExportError(null);
       const children: Paragraph[] = [
         new Paragraph({ text: `SCRIPT: ${topic}`, heading: HeadingLevel.HEADING_1 }),
-        new Paragraph({ children: [new TextRun({ text: `NARRATIVE.WAR V${APP_VERSION} // PRODUCTION SCRIPT`, bold: true })] }),
+        new Paragraph({ children: [new TextRun({ text: `TECH.WAR V${APP_VERSION} // PRODUCTION SCRIPT`, bold: true })] }),
         new Paragraph({ text: `Generated: ${new Date().toLocaleString()}` }),
         new Paragraph({ text: '' }),
         new Paragraph({ text: 'FINAL SCRIPT', heading: HeadingLevel.HEADING_2 }),
@@ -335,7 +335,7 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
 
       const children: Paragraph[] = [
         new Paragraph({ text: `SHOT LIST / B-ROLL BRIEF: ${topic}`, heading: HeadingLevel.HEADING_1 }),
-        new Paragraph({ children: [new TextRun({ text: `NARRATIVE.WAR V${APP_VERSION} // PRODUCTION BRIEF`, bold: true })] }),
+        new Paragraph({ children: [new TextRun({ text: `TECH.WAR V${APP_VERSION} // PRODUCTION BRIEF`, bold: true })] }),
         new Paragraph({ text: `Generated: ${new Date().toLocaleString()}` }),
         new Paragraph({ text: '' }),
       ];
@@ -507,7 +507,7 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
       // script.docx
       const scriptDocChildren: Paragraph[] = [
         new Paragraph({ text: `SCRIPT: ${topic}`, heading: HeadingLevel.HEADING_1 }),
-        new Paragraph({ children: [new TextRun({ text: `NARRATIVE.WAR V${APP_VERSION} // PRODUCTION SCRIPT`, bold: true })] }),
+        new Paragraph({ children: [new TextRun({ text: `TECH.WAR V${APP_VERSION} // PRODUCTION SCRIPT`, bold: true })] }),
         new Paragraph({ text: `Generated: ${new Date().toLocaleString()}` }),
         new Paragraph({ text: '' }),
         new Paragraph({ text: 'FINAL SCRIPT', heading: HeadingLevel.HEADING_2 }),
@@ -637,7 +637,7 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
                 Final Generated Script
               </h2>
               <p className="text-xs text-mw-slate mt-1 font-mono">
-                NARRATIVE.WAR V{APP_VERSION} // {script.length} BLOCKS // ~{estMinutes} MIN ({totalAudioChars.toLocaleString()} CHARS)
+                TECH.WAR V{APP_VERSION} // {script.length} BLOCKS // ~{estMinutes} MIN ({totalAudioChars.toLocaleString()} CHARS)
                 {totalAudioChars < MIN_AUDIO_CHARS && (
                   <span className="text-yellow-400 ml-2">⚠ SHORT (min {MIN_AUDIO_CHARS.toLocaleString()})</span>
                 )}

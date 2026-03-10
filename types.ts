@@ -131,7 +131,7 @@ export const INITIAL_STATE: SystemState = {
   isSteppable: true,
   stepStatus: 'IDLE',
   projectType: 'short_doc',
-  logs: ['> NARRATIVE.WAR INITIALIZED...', '> WAITING FOR TARGET VECTOR...'],
+  logs: ['> TECH.WAR INITIALIZED...', '> WAITING FOR TARGET VECTOR...'],
   history: [],
   showHistory: false
 };
