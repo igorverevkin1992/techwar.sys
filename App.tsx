@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useRef, useReducer } from 'react';
-import mammoth from 'mammoth';
+import { parseCSVText, parseDocxText } from './utils/scriptImport';
 import { AgentType, INITIAL_STATE } from './types';
 import { APP_VERSION, PROJECT_CONFIGS, TOPIC_TEMPLATES } from './constants';
 import { stateReducer } from './store/reducer';
@@ -110,6 +110,14 @@ function App() {
       }
     } catch { /* ignore */ }
   }, [loadHistoryFromServer]);
+
+  // Warn before navigating away while pipeline is running
+  useEffect(() => {
+    if (!state.isProcessing) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [state.isProcessing]);
 
   // Debounced auto-save draft to localStorage
   useEffect(() => {
@@ -410,94 +418,6 @@ function App() {
                       addLog(`>>> IMPORTED: ${blocks.length} blocks from "${file.name}"`);
                     };
 
-                    const parseCSVText = (text: string) => {
-                      const lines = text.split('\n').filter(l => l.trim());
-                      const dataLines = lines.slice(1);
-                      const blocks = dataLines.map(line => {
-                        const fields: string[] = [];
-                        let cur = '', inQuote = false;
-                        for (let i = 0; i < line.length; i++) {
-                          if (line[i] === '"') { inQuote = !inQuote; }
-                          else if (line[i] === ',' && !inQuote) { fields.push(cur); cur = ''; }
-                          else { cur += line[i]; }
-                        }
-                        fields.push(cur);
-                        return {
-                          timecode: fields[0]?.trim() ?? '',
-                          blockType: (fields[1]?.trim() ?? 'BODY') as import('./types').ScriptBlock['blockType'],
-                          visualCue: fields[2]?.trim() ?? '',
-                          audioScript: fields[3]?.trim() ?? '',
-                          russianScript: fields[4]?.trim() ?? '',
-                          overlayFX: '',
-                        };
-                      }).filter(b => b.timecode || b.audioScript);
-                      if (!blocks.length) throw new Error('No rows found in CSV');
-                      return blocks;
-                    };
-
-                    const parseDocxText = (rawText: string) => {
-                      // Our .doc export labels each field clearly:
-                      // "00:00 - 00:30 [HOOK]", "VISUAL: ...", "AUDIO (EN): ...", "AUDIO (RU): ..."
-                      // Field values can span multiple lines — accumulate until the next marker.
-                      // Normalize: tabs (Word table cells) → newlines, then split on \r\n or \n
-                      const rawLines = rawText.replace(/\u00a0/g, ' ').replace(/\t/g, '\n').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-                      // Re-join labels Word HTML splits across leaf elements:
-                      //   "AUDIO" + "(EN): text" → "AUDIO (EN): text"
-                      //   "VISUAL" + ": text"    → "VISUAL: text"
-                      const lines: string[] = [];
-                      for (let i = 0; i < rawLines.length; i++) {
-                        const l = rawLines[i], nx = rawLines[i + 1] ?? '';
-                        if ((l === 'AUDIO' || l === 'VISUAL') && /^\(/.test(nx)) { lines.push(l + ' ' + nx); i++; }
-                        else if ((l === 'AUDIO' || l === 'VISUAL') && /^[：:]/.test(nx)) { lines.push(l + nx); i++; }
-                        else { lines.push(l); }
-                      }
-                      const blocks: import('./types').ScriptBlock[] = [];
-                      let current: Partial<import('./types').ScriptBlock> | null = null;
-                      let activeField: 'visualCue' | 'audioScript' | 'russianScript' | null = null;
-                      // [BLOCKTYPE] is optional — Word may strip or separate the brackets
-                      const tcPattern = /^(\d{1,2}:\d{2}(?::\d{2})?\s*[-–]\s*\d{1,2}:\d{2}(?::\d{2})?)(?:\s*\[([A-Z]+)\])?/;
-                      // Regex-based field matchers — robust against fullwidth parens, varied spacing, different colons
-                      const mVisual  = (l: string) => l.match(/^VISUAL\s*[：:]\s*(.*)/i);
-                      const mAudioEn = (l: string) => l.match(/^AUDIO\s*[\u0028\uff08]EN[\u0029\uff09]\s*[：:]\s*(.*)/i);
-                      const mAudioRu = (l: string) => l.match(/^AUDIO\s*[\u0028\uff08]RU[\u0029\uff09]\s*[：:]\s*(.*)/i);
-                      // Diagnostics: show char codes of the first AUDIO line in block 6 to identify invisible chars
-                      const tcLines = lines.filter(l => tcPattern.test(l));
-                      const tc6idx = lines.findIndex((l, i) => i > 0 && tcPattern.test(l) && lines.slice(0, i).filter(ll => tcPattern.test(ll)).length === 5);
-                      const audioLineNear6 = lines.slice(tc6idx, tc6idx + 10).find(l => l.toUpperCase().includes('AUDIO'));
-                      const charCodes = audioLineNear6 ? [...audioLineNear6.slice(0, 20)].map(c => c.charCodeAt(0).toString(16)).join(' ') : 'none';
-                      addLog(`>>> PARSE DIAG: ${lines.length} lines | ${tcLines.length} timecodes\n  TC6 AUDIO line: "${audioLineNear6?.slice(0, 40)}"\n  char codes: ${charCodes}`);
-                      const isMarker = (l: string) => tcPattern.test(l) || !!mVisual(l) || !!mAudioEn(l) || !!mAudioRu(l);
-                      for (const line of lines) {
-                        const tcMatch = line.match(tcPattern);
-                        if (tcMatch) {
-                          if (current?.audioScript) blocks.push({ timecode: '', visualCue: '', overlayFX: '', audioScript: '', russianScript: '', blockType: 'BODY', ...current });
-                          current = { timecode: tcMatch[1].trim(), blockType: (tcMatch[2] as import('./types').ScriptBlock['blockType']) ?? 'BODY', visualCue: '', overlayFX: '', audioScript: '', russianScript: '' };
-                          activeField = null;
-                          // Single-line block: all fields merged after the timecode
-                          const rest = line.slice(tcMatch[0].length).trim();
-                          if (mAudioEn(rest)) {
-                            const vm = rest.match(/VISUAL\s*[：:]\s*(.*?)(?=AUDIO\s*[\u0028\uff08]EN[\u0029\uff09])/i);
-                            const em = mAudioEn(rest);
-                            const rm = mAudioRu(rest);
-                            if (vm) current.visualCue = vm[1].trim();
-                            if (em) current.audioScript = em[1].split(/AUDIO\s*[\u0028\uff08]RU[\u0029\uff09]/i)[0].trim();
-                            if (rm) current.russianScript = rm[1].trim();
-                          }
-                        } else if (current) {
-                          const vm = mVisual(line); const em = mAudioEn(line); const rm = mAudioRu(line);
-                          if (vm) { current.visualCue = vm[1]; activeField = 'visualCue'; }
-                          else if (em) { current.audioScript = em[1]; activeField = 'audioScript'; }
-                          else if (rm) { current.russianScript = rm[1]; activeField = 'russianScript'; }
-                          else if (activeField && !isMarker(line)) {
-                            // Continuation of the previous field
-                            current[activeField] = (current[activeField] ?? '') + ' ' + line;
-                          }
-                        }
-                      }
-                      if (current?.audioScript) blocks.push({ timecode: '', visualCue: '', overlayFX: '', audioScript: '', russianScript: '', blockType: 'BODY', ...current });
-                      if (!blocks.length) throw new Error('No script blocks found in document. Make sure the file was exported from Tech.War.');
-                      return blocks;
-                    };
 
                     if (file.name.endsWith('.json')) {
                       const reader = new FileReader();
@@ -561,7 +481,7 @@ function App() {
                               const rawHtmlText = textParts.join('\n');
                               const audioLineCount = rawHtmlText.split('\n').filter(l => l.includes('AUDIO (EN):')).length;
                               addLog(`>>> DOC HTML RAW (first 30 lines, ${audioLineCount} AUDIO(EN) markers):\n${rawHtmlText.split('\n').slice(0, 30).join('\n')}`);
-                              importBlocks(parseDocxText(rawHtmlText));
+                              importBlocks(parseDocxText(rawHtmlText, addLog));
                             }
                           } else {
                             // Real DOCX (ZIP) — use mammoth via ArrayBuffer
@@ -569,10 +489,11 @@ function App() {
                             abReader.onload = async (abEv) => {
                               try {
                                 const arrayBuffer = abEv.target?.result as ArrayBuffer;
+                                const { default: mammoth } = await import('mammoth');
                                 const result = await mammoth.extractRawText({ arrayBuffer });
                                 const preview = result.value.split('\n').slice(0, 30).join('\n');
                                 addLog(`>>> DOCX RAW (first 30 lines):\n${preview}`);
-                                importBlocks(parseDocxText(result.value));
+                                importBlocks(parseDocxText(result.value, addLog));
                               } catch (err) { addLog(`>>> IMPORT ERROR: ${err instanceof Error ? err.message : String(err)}`); }
                             };
                             abReader.readAsArrayBuffer(file);
@@ -594,6 +515,27 @@ function App() {
               const isActive = state.currentAgent === step.id;
               const thisIdx = agentOrder.indexOf(step.id);
               const isPast = currentIdx > thisIdx;
+              const canRerun = isPast && !state.isProcessing;
+              const rerunAction: (() => void) | null = (() => {
+                if (!canRerun) return null;
+                switch (step.id) {
+                  case AgentType.SCOUT:    return () => pipeline.executeScout();
+                  case AgentType.RADAR:    return state.topic ? () => pipeline.executeRadar() : null;
+                  case AgentType.ANALYST:  return state.radarOutput ? () => pipeline.executeAnalyst(state.radarOutput!) : null;
+                  case AgentType.ARCHITECT: return state.researchDossier ? () => pipeline.executeArchitect(state.researchDossier!) : null;
+                  case AgentType.DOC_CIRCLE: return (state.structureMap && state.researchDossier) ? () => pipeline.executeDocCircle(state.structureMap!, state.researchDossier!) : null;
+                  case AgentType.ACT_PLANNING: return (state.docCircle && state.structureMap && state.researchDossier) ? () => pipeline.executeActPlanning(state.docCircle!, state.structureMap!, state.researchDossier!) : null;
+                  case AgentType.OUTLINER: return (state.structureMap && state.researchDossier) ? () => pipeline.executeOutline(state.structureMap!, state.researchDossier!, state.docCircle, state.actPlanning) : null;
+                  case AgentType.WRITER: {
+                    if (isDocPipeline(state.projectType) && state.documentaryActs && state.researchDossier)
+                      return () => pipeline.executeDocumentaryWriter(state.documentaryActs!, state.researchDossier!);
+                    if (state.structureMap && state.researchDossier)
+                      return () => pipeline.executeWriter(state.structureMap!, state.researchDossier!, state.scriptOutline);
+                    return null;
+                  }
+                  default: return null;
+                }
+              })();
               return (
                 <div key={step.id} className={`flex items-center gap-4 p-4 rounded border transition-all ${isActive ? 'bg-mw-red/10 border-mw-red text-white' : isPast ? 'bg-mw-gray/20 border-mw-slate/30 text-green-500' : 'bg-transparent border-transparent text-mw-slate opacity-50'}`}>
                   <step.icon />
@@ -602,7 +544,17 @@ function App() {
                     <div className="text-xs font-mono opacity-70">{step.desc}</div>
                   </div>
                   {isActive && <div className="ml-auto w-2 h-2 bg-mw-red rounded-full animate-ping" />}
-                  {isPast && <div className="ml-auto text-green-500 text-xs font-mono">[OK]</div>}
+                  {isPast && !rerunAction && <div className="ml-auto text-green-500 text-xs font-mono">[OK]</div>}
+                  {isPast && rerunAction && (
+                    <button
+                      onClick={rerunAction}
+                      title={`Re-run ${step.label}`}
+                      className="ml-auto text-green-500 hover:text-mw-red transition-colors flex items-center gap-1 text-xs font-mono group"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="group-hover:rotate-180 transition-transform duration-300"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                      <span className="group-hover:text-mw-red">[OK]</span>
+                    </button>
+                  )}
                 </div>
               );
             })}

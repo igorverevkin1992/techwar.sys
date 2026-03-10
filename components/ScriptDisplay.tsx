@@ -1,7 +1,5 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import JSZip from 'jszip';
-import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
 import { ScriptBlock, ProjectType, SeoPackage } from '../types';
 import { APP_VERSION, CHARS_PER_SECOND, PROJECT_CONFIGS, DEMONETIZATION_BLACKLIST } from '../constants';
 import { Action } from '../store/reducer';
@@ -197,12 +195,13 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
   const handleExportDossierOnly = async () => {
     try {
       setExportError(null);
+      const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import('docx');
       const sections = [
         { title: 'AGENT A: RADAR INTERCEPT', content: radarContent || 'No Radar Data Available' },
         { title: 'AGENT B: INTELLIGENCE DOSSIER', content: typeof analystContent === 'string' ? analystContent : JSON.stringify(analystContent, null, 2) || 'No Analyst Data Available' },
         { title: 'AGENT C: STRUCTURE BLUEPRINT', content: architectContent || 'No Architect Data Available' },
       ];
-      const children: Paragraph[] = [
+      const children = [
         new Paragraph({ text: `INTELLIGENCE DOSSIER: ${topic}`, heading: HeadingLevel.HEADING_1 }),
         new Paragraph({ children: [new TextRun({ text: `TECH.WAR V${APP_VERSION} // RESEARCH DATA ONLY`, bold: true })] }),
         new Paragraph({ text: `Generated: ${new Date().toLocaleString()}` }),
@@ -226,7 +225,8 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
   const handleExportScriptOnly = async () => {
     try {
       setExportError(null);
-      const children: Paragraph[] = [
+      const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import('docx');
+      const children = [
         new Paragraph({ text: `SCRIPT: ${topic}`, heading: HeadingLevel.HEADING_1 }),
         new Paragraph({ children: [new TextRun({ text: `TECH.WAR V${APP_VERSION} // PRODUCTION SCRIPT`, bold: true })] }),
         new Paragraph({ text: `Generated: ${new Date().toLocaleString()}` }),
@@ -322,6 +322,7 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
   const handleExportShotList = async () => {
     try {
       setExportError(null);
+      const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import('docx');
       const SHOT_CATEGORIES = ['ВЕДУЩИЙ', 'АРХИВНЫЕ КАДРЫ', 'B-ROLL', 'ДОКУМЕНТ', 'АНИМАЦИЯ ДАННЫХ', 'ИНТЕРВЬЮ', 'ХРОНИКА', 'ТИТР'];
       const groups: Record<string, { timecode: string; blockType: string; visual: string }[]> = {};
       for (const cat of [...SHOT_CATEGORIES, 'OTHER']) groups[cat] = [];
@@ -333,7 +334,7 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
         groups[cat].push({ timecode: block.timecode, blockType: block.blockType, visual: block.visualCue });
       });
 
-      const children: Paragraph[] = [
+      const children = [
         new Paragraph({ text: `SHOT LIST / B-ROLL BRIEF: ${topic}`, heading: HeadingLevel.HEADING_1 }),
         new Paragraph({ children: [new TextRun({ text: `TECH.WAR V${APP_VERSION} // PRODUCTION BRIEF`, bold: true })] }),
         new Paragraph({ text: `Generated: ${new Date().toLocaleString()}` }),
@@ -501,11 +502,15 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
   const handleDownloadAll = async () => {
     try {
       setExportError(null);
+      const [{ default: JSZip }, { Document, Packer, Paragraph, TextRun, HeadingLevel }] = await Promise.all([
+        import('jszip'),
+        import('docx'),
+      ]);
       const zip = new JSZip();
       const fn = safeFilename;
 
       // script.docx
-      const scriptDocChildren: Paragraph[] = [
+      const scriptDocChildren = [
         new Paragraph({ text: `SCRIPT: ${topic}`, heading: HeadingLevel.HEADING_1 }),
         new Paragraph({ children: [new TextRun({ text: `TECH.WAR V${APP_VERSION} // PRODUCTION SCRIPT`, bold: true })] }),
         new Paragraph({ text: `Generated: ${new Date().toLocaleString()}` }),

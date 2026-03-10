@@ -1,4 +1,4 @@
-import { useCallback, useRef, Dispatch } from 'react';
+import { useCallback, useEffect, useRef, Dispatch } from 'react';
 import {
   runScoutAgent,
   runRadarAgent,
@@ -101,7 +101,9 @@ export function useAgentPipeline({
   const abortRef = useRef<AbortController | null>(null);
   // Keep latest state accessible inside async callbacks without stale closures
   const stateRef = useRef(state);
-  stateRef.current = state;
+  useEffect(() => { stateRef.current = state; });
+  // Abort any running operation when component unmounts
+  useEffect(() => () => { abortRef.current?.abort(); }, []);
 
   const cancelCurrentOperation = useCallback(() => {
     abortRef.current?.abort();
@@ -190,21 +192,29 @@ export function useAgentPipeline({
     if (useParallel) {
       addLog(`>>> MODE: PARALLEL — all ${acts.length} acts writing simultaneously (no motif tracking).`);
       dispatch({ type: 'MERGE', partial: { currentWritingAct: 0 } });
-      const results = await Promise.all(
+      const settled = await Promise.allSettled(
         acts.map((act, i) => {
           addLog(`>>> ACT ${i + 1}/${acts.length}: ${act.block} [parallel]...`);
           return runDocumentaryActWriter(act, acts, inputDossier, [], controller.signal, scriptOutline, projectType);
         })
       );
-      for (let i = 0; i < results.length; i++) {
-        if (!results[i]) {
-          const error = `Act ${i + 1} ("${acts[i].block}") generation failed.`;
-          addLog(`>>> ERROR: ${error}`);
-          dispatch({ type: 'MERGE', partial: { isProcessing: false, stepStatus: 'IDLE', lastError: error } });
-          return;
+      const failedActs: string[] = [];
+      for (let i = 0; i < settled.length; i++) {
+        const r = settled[i];
+        if (r.status === 'rejected' || !r.value) {
+          const reason = r.status === 'rejected' ? (r.reason instanceof Error ? r.reason.message : String(r.reason)) : 'empty result';
+          failedActs.push(`Act ${i + 1} ("${acts[i].block}"): ${reason}`);
+          addLog(`>>> ERROR: Act ${i + 1} failed — ${reason}`);
+        } else {
+          allBlocks = [...allBlocks, ...r.value];
+          addLog(`>>> ACT ${i + 1} DONE: ${r.value.length} blocks.`);
         }
-        allBlocks = [...allBlocks, ...results[i]!];
-        addLog(`>>> ACT ${i + 1} DONE: ${results[i]!.length} blocks.`);
+      }
+      if (failedActs.length > 0) {
+        const error = `${failedActs.length} act(s) failed: ${failedActs.join('; ')}`;
+        dispatch({ type: 'MERGE', partial: { isProcessing: false, stepStatus: 'IDLE', lastError: error } });
+        if (allBlocks.length === 0) return;
+        addLog(`>>> WARNING: Partial result — continuing with ${allBlocks.length} blocks from succeeded acts.`);
       }
       dispatch({ type: 'MERGE', partial: { finalScript: calculateDurationAndRetiming(allBlocks) } });
     } else {

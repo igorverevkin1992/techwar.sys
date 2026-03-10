@@ -638,7 +638,7 @@ CRITICAL - ORGANIC TIMING:
 LANGUAGE REQUIREMENTS:
 - audioScript: ENGLISH only (international, professional, analytical tone). This is an English-language channel.
 - russianScript: Leave as empty string "". This field is reserved for optional subtitle tracks but is not required for this channel.
-- visualCue: ENGLISH (for the editor). Describe the visual clearly in English.
+- visualCue: RUSSIAN (для редактора / for the editor). Describe the visual in Russian using standard labels.
 
 OUTPUT FORMAT:
 Return a valid JSON array (MINIMUM 60 OBJECTS).
@@ -647,7 +647,7 @@ Example:
 [
   {
     "timecode": "00:00 - 00:08",
-    "visualCue": "[VISUAL ANCHOR] Split screen. Left: a user's recommendation feed showing moderate political content. Right: the same user's feed six months later — showing extreme content on the same topic.",
+    "visualCue": "[ВИЗУАЛЬНЫЙ ЯКОРЬ] Разделённый экран. Слева: рекомендательная лента пользователя с умеренным политическим контентом. Справа: та же лента шесть месяцев спустя — экстремальный контент по той же теме.",
     "overlayFX": "[HUD] Timestamp overlay. Arrow showing the recommendation gradient shift.",
     "audioScript": "Same person. Same platform. Same search history. Six months apart. The question isn't what changed — the question is what the algorithm was optimizing for.",
     "russianScript": "",
@@ -655,7 +655,7 @@ Example:
   },
   {
     "timecode": "00:08 - 00:20",
-    "visualCue": "[HOST ON CAMERA] Points to a platform engineering blog post on screen. Zoom into the phrase 'engagement-driven recommendation'.",
+    "visualCue": "[ВЕДУЩИЙ] Ведущий указывает на инженерный блог платформы на экране. Наезд на фразу 'engagement-driven recommendation'.",
     "overlayFX": "[HIGHLIGHT] Yellow highlight on 'engagement-driven recommendation'.",
     "audioScript": "Notice the language. Not 'accuracy-driven'. Not 'quality-driven'. Engagement-driven. The platform chose this architecture. The question is: what does engagement actually optimize for?",
     "russianScript": "",
@@ -770,15 +770,15 @@ REFRAMING EXAMPLES:
 - BAD: "She committed suicide." → GOOD: "She made a final choice. One that the system had driven her toward for years."
 
 DOCUMENTARY VISUAL LANGUAGE:
-- visualCue (in English for editor): Use documentary-specific labels:
-  [ARCHIVAL FOOTAGE] — historical archival footage
-  [INTERVIEW] — interview cutaway (type of expert or witness)
-  [B-ROLL] — establishing shots, location footage, screen recordings
-  [DATA ANIMATION] — animated data/map/chart visualization
-  [DOCUMENT] — close-up of document, policy text, or headline
-  [HOST ON CAMERA] — host on camera
-  [SCREEN RECORDING] — platform UI, app interface, or algorithm output visualization
-- overlayFX: Documentary-appropriate (e.g., "[LOWER THIRD] Expert name + title", "[TIMELINE]", "[DATA CHART]", "[PLATFORM LABEL]")
+- visualCue (на русском для редактора): Use documentary-specific labels in Russian:
+  [АРХИВНЫЕ КАДРЫ] — исторические архивные материалы
+  [ИНТЕРВЬЮ] — врезка с экспертом или свидетелем (укажи тип)
+  [B-ROLL] — общие планы, съёмка локации, скринрекординг
+  [АНИМАЦИЯ ДАННЫХ] — анимированная визуализация данных/карты/графика
+  [ДОКУМЕНТ] — крупный план документа, текста политики или заголовка
+  [ВЕДУЩИЙ] — ведущий в кадре
+  [СКРИНРЕКОРДИНГ] — интерфейс платформы, приложение или визуализация вывода алгоритма
+- overlayFX: Documentary-appropriate (e.g., "[ПОДПИСЬ] Имя эксперта + должность", "[ХРОНОЛОГИЯ]", "[ДАННЫЕ]", "[ПЛАТФОРМА]")
 
 NARRATIVE CONTINUITY:
 - If previous act blocks are provided, ensure the FIRST block of this act connects smoothly to where the last act ended.
@@ -787,12 +787,12 @@ NARRATIVE CONTINUITY:
 
 ACT HEADER RULE (MANDATORY — NO EXCEPTIONS):
 The VERY FIRST block of this act MUST be a title card. Fill in the actual act number and title:
-- visualCue: "[TITLE CARD] Black screen with white act text. Fade in."
-- overlayFX: "[TITLE CARD] ACT {N}: \"{ACT TITLE}\""  ← replace {N} and {ACT TITLE} with real values
+- visualCue: "[ТИТР] Чёрный экран с белым текстом. Fade in."
+- overlayFX: "[ТИТР] АКТ {N}: «{ACT TITLE}»"  ← replace {N} and {ACT TITLE} with real values
 - audioScript: A brief atmospheric phrase (10–15 words max). Set mood, NO factual claims yet.
 - russianScript: Leave as empty string "".
 - blockType: "TRANSITION"
-Example for Act 3 titled "The Mechanism": overlayFX = "[TITLE CARD] ACT 3: \"The Mechanism\""
+Example for Act 3 titled "The Mechanism": overlayFX = "[ТИТР] АКТ 3: «The Mechanism»"
 
 SCRIPTING RULES:
 1. DEICTIC IMPERATIVE: "Look at this document," "Notice the date," "Compare this testimony to that statement."
@@ -859,7 +859,7 @@ STRICT RULES:
 LANGUAGE REQUIREMENTS:
 - audioScript: ENGLISH only (analytical, documentary narration register). This is an English-language channel.
 - russianScript: Leave as empty string "". This field is reserved for optional subtitle tracks but is not required for this channel.
-- visualCue: ENGLISH (for the editor). Describe the visual clearly in English.
+- visualCue: RUSSIAN (для редактора / for the editor). Describe the visual in Russian using standard labels.
 
 OUTPUT FORMAT:
 Return a valid JSON array of 28–35 ScriptBlock objects for THIS ACT ONLY.
@@ -869,8 +869,8 @@ CRITICAL OUTPUT RULE: Output ONLY valid JSON. No markdown, no preamble, no comme
 [
   {
     "timecode": "00:00 - 00:00",
-    "visualCue": "[ARCHIVAL FOOTAGE] Data center exterior, slow zoom. Cut to: a single user's screen — recommendation feed cycling content automatically.",
-    "overlayFX": "[TIMELINE] Year the recommendation algorithm was deployed.",
+    "visualCue": "[АРХИВНЫЕ КАДРЫ] Экстерьер дата-центра, медленный наезд. Переход: экран одного пользователя — рекомендательная лента автоматически прокручивает контент.",
+    "overlayFX": "[ХРОНОЛОГИЯ] Год развёртывания рекомендательного алгоритма.",
     "audioScript": "Sixty years ago, the infrastructure of public opinion was called the press. Today, it is a recommendation engine running on seventeen billion devices, owned by four companies, and governed by no state on earth.",
     "russianScript": "",
     "blockType": "BODY"
@@ -987,7 +987,7 @@ NARRATIVE CRAFT RULES:
 LANGUAGE REQUIREMENTS:
 - audioScript: ENGLISH only (sharp, analytical, direct YouTube narration). This is an English-language channel.
 - russianScript: Leave as empty string "". This field is reserved for optional subtitle tracks but is not required for this channel.
-- visualCue: ENGLISH (for the editor). Describe the visual clearly in English.
+- visualCue: RUSSIAN (для редактора / for the editor). Describe the visual in Russian using standard labels.
 
 OUTPUT FORMAT:
 Return a valid JSON array of 15–20 ScriptBlock objects for THIS ACT ONLY.
@@ -997,8 +997,8 @@ CRITICAL OUTPUT RULE: Output ONLY valid JSON. No markdown, no preamble, no comme
 [
   {
     "timecode": "00:00 - 00:00",
-    "visualCue": "[SCREEN RECORDING] Side-by-side: two users' feeds on the same platform showing opposite content about the same event.",
-    "overlayFX": "[TIMELINE] Date the recommendation update was deployed.",
+    "visualCue": "[СКРИНРЕКОРДИНГ] Рядом: две ленты разных пользователей на одной платформе — противоположный контент об одном и том же событии.",
+    "overlayFX": "[ХРОНОЛОГИЯ] Дата развёртывания обновления рекомендательного алгоритма.",
     "audioScript": "Same platform. Same day. Same topic. Completely different realities. The platform didn't make a mistake. It made a choice.",
     "russianScript": "",
     "blockType": "BODY"

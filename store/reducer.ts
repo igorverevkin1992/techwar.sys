@@ -30,6 +30,9 @@ function pushUndo(state: SystemState): Pick<SystemState, 'undoStack' | 'redoStac
 export function stateReducer(state: SystemState, action: Action): SystemState {
   switch (action.type) {
     case 'SET_FIELD':
+      if (action.field === 'finalScript' && action.value) {
+        return { ...state, ...pushUndo(state), [action.field]: action.value };
+      }
       return { ...state, [action.field]: action.value };
     case 'ADD_LOG': {
       const logs = [...state.logs, action.message];
