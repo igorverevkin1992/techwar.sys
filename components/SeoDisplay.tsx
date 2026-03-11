@@ -27,6 +27,27 @@ const downloadSeoTxt = (seo: SeoPackage) => {
     'END SCREEN SCRIPT',
     '═══════════════════════════════════════',
     seo.endScreenScript,
+    ...(seo.keywords && seo.keywords.length > 0 ? [
+      '',
+      '═══════════════════════════════════════',
+      'KEYWORDS',
+      '═══════════════════════════════════════',
+      seo.keywords.join(', '),
+    ] : []),
+    ...(seo.hashtags && seo.hashtags.length > 0 ? [
+      '',
+      '═══════════════════════════════════════',
+      'HASHTAGS',
+      '═══════════════════════════════════════',
+      seo.hashtags.map(h => h.startsWith('#') ? h : `#${h}`).join(' '),
+    ] : []),
+    ...(seo.shortsExcerpt ? [
+      '',
+      '═══════════════════════════════════════',
+      'SHORTS EXCERPT',
+      '═══════════════════════════════════════',
+      seo.shortsExcerpt,
+    ] : []),
   ].join('\n');
   const blob = new Blob(['\ufeff', content], { type: 'text/plain;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -107,7 +128,18 @@ const SeoDisplay: React.FC<SeoDisplayProps> = ({ seo }) => {
       <div>
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-bold text-mw-slate uppercase tracking-wider">Tags</span>
-          <CopyButton text={seo.tags} />
+          <div className="flex items-center gap-2">
+            {(() => {
+              const count = seo.tagCharCount ?? seo.tags.length;
+              const over = count > 500;
+              return (
+                <span className={`text-[10px] font-mono ${over ? 'text-red-400' : 'text-green-400'}`}>
+                  {count}/500 chars
+                </span>
+              );
+            })()}
+            <CopyButton text={seo.tags} />
+          </div>
         </div>
         <div className="flex flex-wrap gap-1">
           {seo.tags.split(',').map((tag, i) => (
@@ -117,6 +149,58 @@ const SeoDisplay: React.FC<SeoDisplayProps> = ({ seo }) => {
           ))}
         </div>
       </div>
+
+      {/* Keywords */}
+      {seo.keywords && seo.keywords.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-mw-slate uppercase tracking-wider">Keywords</span>
+            <CopyButton text={seo.keywords.join(', ')} />
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {seo.keywords.map((kw, i) => (
+              <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono rounded bg-mw-slate/10 border border-mw-slate/20 text-mw-slate">
+                {kw}
+                <CopyButton text={kw} />
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Hashtags */}
+      {seo.hashtags && seo.hashtags.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-mw-slate uppercase tracking-wider">Hashtags</span>
+            <CopyButton text={seo.hashtags.map(h => h.startsWith('#') ? h : `#${h}`).join(' ')} />
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {seo.hashtags.map((ht, i) => {
+              const display = ht.startsWith('#') ? ht : `#${ht}`;
+              return (
+                <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono rounded bg-mw-red/10 border border-mw-red/20 text-mw-red">
+                  {display}
+                  <CopyButton text={display} />
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Shorts Excerpt */}
+      {seo.shortsExcerpt && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-mw-slate uppercase tracking-wider">Shorts Excerpt</span>
+            <CopyButton text={seo.shortsExcerpt} />
+          </div>
+          <p className="text-gray-300 text-sm font-mono bg-black/30 border border-mw-slate/20 rounded p-3">
+            {seo.shortsExcerpt}
+          </p>
+        </div>
+      )}
 
       {/* First Comment */}
       <div>
@@ -143,4 +227,4 @@ const SeoDisplay: React.FC<SeoDisplayProps> = ({ seo }) => {
   );
 };
 
-export default SeoDisplay;
+export default React.memo(SeoDisplay);

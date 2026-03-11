@@ -123,4 +123,4 @@ const ThumbnailPreview: React.FC<ThumbnailPreviewProps> = ({
   );
 };
 
-export default ThumbnailPreview;
+export default React.memo(ThumbnailPreview);

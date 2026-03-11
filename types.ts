@@ -61,6 +61,10 @@ export interface SeoPackage {
   tags: string;
   firstComment: string;
   endScreenScript: string;
+  keywords?: string[];
+  hashtags?: string[];
+  shortsExcerpt?: string;
+  tagCharCount?: number;
 }
 
 export interface HistoryItem {

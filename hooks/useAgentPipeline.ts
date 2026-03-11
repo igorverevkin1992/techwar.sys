@@ -20,6 +20,7 @@ import { AgentType, SystemState, TopicSuggestion, ResearchDossier, ScriptBlock, 
 import { Action } from '../store/reducer';
 import { AGENT_MODELS, PROJECT_CONFIGS, DEMONETIZATION_BLACKLIST } from '../constants';
 import { getSettings } from '../appSettings';
+import { saveCheckpoint, clearCheckpoint } from '../services/checkpointService';
 
 // Helper: true for any project type that uses the documentary pipeline (DocCircle → ActPlanning → Outline → multi-pass Writer)
 export const isDocPipeline = (pt: string): boolean => pt === 'documentary' || pt === 'short_doc';
@@ -101,9 +102,24 @@ export function useAgentPipeline({
   const abortRef = useRef<AbortController | null>(null);
   // Keep latest state accessible inside async callbacks without stale closures
   const stateRef = useRef(state);
-  useEffect(() => { stateRef.current = state; });
+  useEffect(() => { stateRef.current = state; }, [state]);
   // Abort any running operation when component unmounts
   useEffect(() => () => { abortRef.current?.abort(); }, []);
+
+  // Shared auto-SEO logic (called after script completion in both Writer and DocumentaryWriter)
+  const runAutoSEO = useCallback(async (topic: string, radarOutput: string | undefined, script: ScriptBlock[]) => {
+    if (!getSettings().autoSeoEnabled) return;
+    addLog('>>> AUTO SEO: Generating YouTube SEO package...');
+    try {
+      const pkg = await runSEOAgent(topic, radarOutput, script);
+      if (pkg) {
+        dispatch({ type: 'MERGE', partial: { seoPackage: pkg } });
+        addLog('>>> AUTO SEO: Done.');
+      }
+    } catch (e) {
+      addLog(`>>> AUTO SEO: Failed — ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }, [dispatch, addLog]);
 
   const cancelCurrentOperation = useCallback(() => {
     abortRef.current?.abort();
@@ -160,21 +176,8 @@ export function useAgentPipeline({
       }
     });
     addLog('>>> SYSTEM STANDBY.');
-
-    // Auto-SEO: silently generate after script is ready (if enabled in settings)
-    if (getSettings().autoSeoEnabled) {
-      addLog('>>> AUTO SEO: Generating YouTube SEO package...');
-      try {
-        const pkg = await runSEOAgent(topic, radarOutput, script);
-        if (pkg) {
-          dispatch({ type: 'MERGE', partial: { seoPackage: pkg } });
-          addLog('>>> AUTO SEO: Done.');
-        }
-      } catch (e) {
-        addLog(`>>> AUTO SEO: Failed — ${e instanceof Error ? e.message : String(e)}`);
-      }
-    }
-  }, [newController, dispatch, addLog, saveToHistory]);
+    await runAutoSEO(topic, radarOutput, script);
+  }, [newController, dispatch, addLog, saveToHistory, runAutoSEO]);
 
   // ── DOCUMENTARY MULTI-PASS WRITER ────────────────────────────────────────────
   const executeDocumentaryWriter = useCallback(async (
@@ -217,6 +220,8 @@ export function useAgentPipeline({
         addLog(`>>> WARNING: Partial result — continuing with ${allBlocks.length} blocks from succeeded acts.`);
       }
       dispatch({ type: 'MERGE', partial: { finalScript: calculateDurationAndRetiming(allBlocks) } });
+      const s = stateRef.current;
+      saveCheckpoint(s.topic, { topic: s.topic, projectType, completedActs: acts.length - failedActs.length, totalActs: acts.length, partialScript: allBlocks, radarOutput: s.radarOutput, researchDossier: s.researchDossier, structureMap: s.structureMap, scriptOutline, docCircle: s.docCircle, actPlanning: s.actPlanning, documentaryActs: acts, savedAt: new Date().toISOString() }).catch(() => {});
     } else {
       let motifLog = '';
       for (let i = 0; i < acts.length; i++) {
@@ -239,6 +244,8 @@ export function useAgentPipeline({
         allBlocks = [...allBlocks, ...actBlocks];
         addLog(`>>> ACT ${i + 1} DONE: ${actBlocks.length} blocks.`);
         dispatch({ type: 'MERGE', partial: { finalScript: calculateDurationAndRetiming(allBlocks) } });
+        const s = stateRef.current;
+        saveCheckpoint(s.topic, { topic: s.topic, projectType, completedActs: i + 1, totalActs: acts.length, partialScript: allBlocks, radarOutput: s.radarOutput, researchDossier: s.researchDossier, structureMap: s.structureMap, scriptOutline, docCircle: s.docCircle, actPlanning: s.actPlanning, documentaryActs: acts, savedAt: new Date().toISOString() }).catch(() => {});
 
         const anchorBlocks = actBlocks.filter(b => ['HOOK', 'INTRO', 'TRANSITION'].includes(b.blockType)).slice(0, 3);
         if (anchorBlocks.length) {
@@ -273,22 +280,10 @@ export function useAgentPipeline({
         history: updatedHistory,
       }
     });
+    clearCheckpoint(topic).catch(() => {});
     addLog('>>> SYSTEM STANDBY.');
-
-    // Auto-SEO: silently generate after script is ready (if enabled in settings)
-    if (getSettings().autoSeoEnabled) {
-      addLog('>>> AUTO SEO: Generating YouTube SEO package...');
-      try {
-        const pkg = await runSEOAgent(topic, radarOutput, retimed);
-        if (pkg) {
-          dispatch({ type: 'MERGE', partial: { seoPackage: pkg } });
-          addLog('>>> AUTO SEO: Done.');
-        }
-      } catch (e) {
-        addLog(`>>> AUTO SEO: Failed — ${e instanceof Error ? e.message : String(e)}`);
-      }
-    }
-  }, [newController, dispatch, addLog, saveToHistory]);
+    await runAutoSEO(topic, radarOutput, retimed);
+  }, [newController, dispatch, addLog, saveToHistory, runAutoSEO]);
 
   // ── OUTLINER ─────────────────────────────────────────────────────────────────
   const executeOutline = useCallback(async (

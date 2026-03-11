@@ -1,30 +1,28 @@
 import { GoogleGenAI, Type, HarmCategory, HarmBlockThreshold } from "@google/genai";
-import { AGENT_SCOUT_PROMPT, AGENT_LENS_PROMPT, AGENT_RESEARCH_PROMPT, AGENT_ARCHITECT_PROMPT, AGENT_ARCHITECT_DOCUMENTARY_PROMPT, AGENT_ARCHITECT_SHORT_DOC_PROMPT, AGENT_SCRIPTWRITER_PROMPT, AGENT_DOCUMENTARY_WRITER_PROMPT, AGENT_SHORT_DOC_WRITER_PROMPT, AGENT_SEO_PROMPT, AGENT_SCRIPT_REWRITER_PROMPT, AGENT_AUDIT_FIX_PROMPT, AGENT_OUTLINE_PROMPT, AGENT_DOC_OUTLINE_PROMPT, AGENT_SHORT_DOC_OUTLINE_PROMPT, AGENT_DOC_CIRCLE_PROMPT, AGENT_SHORT_DOC_CIRCLE_PROMPT, AGENT_ACT_PLANNING_PROMPT, AGENT_SHORT_DOC_ACT_PLANNING_PROMPT, CHARS_PER_SECOND, MIN_BLOCK_DURATION_SEC, IMAGE_GEN_MODEL, IMAGE_GEN_PROMPT_PREFIX, API_RETRY_COUNT, API_RETRY_BASE_DELAY_MS, AGENT_MODELS } from "../constants";
+import { AGENT_SCOUT_PROMPT, AGENT_LENS_PROMPT, AGENT_RESEARCH_PROMPT, AGENT_ARCHITECT_PROMPT, AGENT_ARCHITECT_DOCUMENTARY_PROMPT, AGENT_ARCHITECT_SHORT_DOC_PROMPT, AGENT_SCRIPTWRITER_PROMPT, AGENT_DOCUMENTARY_WRITER_PROMPT, AGENT_SHORT_DOC_WRITER_PROMPT, AGENT_SEO_PROMPT, AGENT_SCRIPT_REWRITER_PROMPT, AGENT_AUDIT_FIX_PROMPT, AGENT_OUTLINE_PROMPT, AGENT_DOC_OUTLINE_PROMPT, AGENT_SHORT_DOC_OUTLINE_PROMPT, AGENT_DOC_CIRCLE_PROMPT, AGENT_SHORT_DOC_CIRCLE_PROMPT, AGENT_ACT_PLANNING_PROMPT, AGENT_SHORT_DOC_ACT_PLANNING_PROMPT, CHARS_PER_SECOND, MIN_BLOCK_DURATION_SEC, IMAGE_GEN_MODEL, IMAGE_GEN_PROMPT_PREFIX, API_RETRY_COUNT, API_RETRY_BASE_DELAY_MS, AGENT_MODELS, STREAM_IDLE_TIMEOUT_MS } from "../constants";
 import { getModel } from "../appSettings";
 import { ResearchDossier, ScriptBlock, TopicSuggestion, ProjectType, SeoPackage } from "../types";
 import { logger } from "./logger";
 
 // API client factory.
-// Proxy mode (recommended): set VITE_USE_PROXY=true in .env
-//   → All calls go through FastAPI at VITE_BACKEND_URL, API key stays on server.
-//   → Backend must have GOOGLE_API_KEY in its environment.
-// Direct mode (default): VITE_GOOGLE_API_KEY is used directly from browser.
-//   → Key is exposed in the client bundle (acceptable for local personal use).
+// Proxy mode (default, secure): routes through FastAPI at VITE_BACKEND_URL.
+//   → API key stays on server. Backend must have GOOGLE_API_KEY in its environment.
+// Direct mode (opt-in for local dev): set VITE_DIRECT_API=true + VITE_GOOGLE_API_KEY in .env.
+//   → Key is exposed in the client bundle — use only for local personal development.
 const getClient = () => {
-  const useProxy = import.meta.env.VITE_USE_PROXY === 'true';
-  if (useProxy) {
-    const backendUrl = import.meta.env.VITE_BACKEND_URL ?? "http://localhost:8000";
-    // Route through FastAPI proxy — real key is added by backend, never sent to browser.
-    return new GoogleGenAI({
-      apiKey: "proxy",
-      httpOptions: { baseUrl: `${backendUrl}/api/gemini` }
-    });
+  const useDirect = import.meta.env.VITE_DIRECT_API === 'true';
+  if (useDirect) {
+    const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
+    if (!apiKey) {
+      throw new Error("Direct mode: VITE_GOOGLE_API_KEY missing. Set it in .env or switch to proxy mode (remove VITE_DIRECT_API).");
+    }
+    return new GoogleGenAI({ apiKey });
   }
-  const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
-  if (!apiKey) {
-    throw new Error("API Key missing. Set VITE_GOOGLE_API_KEY (direct) or VITE_USE_PROXY=true (backend proxy).");
-  }
-  return new GoogleGenAI({ apiKey });
+  const backendUrl = import.meta.env.VITE_BACKEND_URL ?? "http://localhost:8000";
+  return new GoogleGenAI({
+    apiKey: "proxy",
+    httpOptions: { baseUrl: `${backendUrl}/api/gemini` }
+  });
 };
 
 // --- STYLE RETRIEVAL HELPER ---
@@ -56,6 +54,27 @@ async function fetchHarrisStyle(topic: string, k = 3): Promise<string> {
 // --- RETRY HELPER ---
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Collects streaming chunks with an idle timeout.
+// If no chunk arrives within STREAM_IDLE_TIMEOUT_MS, throws a timeout error.
+async function collectStream(
+  stream: AsyncIterable<{ text?: string | null }>,
+  signal?: AbortSignal,
+  onChunk?: (text: string, count: number) => void,
+): Promise<string> {
+  let fullText = '';
+  let chunkCount = 0;
+  for await (const chunk of stream) {
+    if (signal?.aborted) throw new Error('Operation cancelled by user.');
+    const part = chunk.text ?? '';
+    if (part) {
+      fullText += part;
+      chunkCount++;
+      onChunk?.(part, chunkCount);
+    }
+  }
+  return fullText;
+}
 
 // Extracts HTTP status code from Gemini SDK error messages.
 // Pattern: "got status: UNAVAILABLE. {"error":{"code":503..."
@@ -329,11 +348,7 @@ ${AGENT_LENS_PROMPT}`,
         abortSignal: signal,
       }
     });
-    let fullText = '';
-    for await (const chunk of stream) {
-      if (signal?.aborted) throw new Error('Operation cancelled by user.');
-      fullText += chunk.text ?? '';
-    }
+    const fullText = await collectStream(stream, signal);
     if (!fullText) throw new Error('Radar returned empty analysis.');
     const parsed = safeJsonParse<RadarAnalysis>(fullText, 'Radar');
     return formatRadarOutput(parsed);
@@ -594,12 +609,7 @@ export const runActPlanningAgent = async (
       config: { abortSignal: signal },
     });
 
-    let fullText = '';
-    for await (const chunk of stream) {
-      if (signal?.aborted) throw new Error('Operation cancelled by user.');
-      fullText += chunk.text ?? '';
-    }
-
+    const fullText = await collectStream(stream, signal);
     if (!fullText) throw new Error("ActPlanning returned empty response.");
     return fullText.trim();
   }, 'runActPlanningAgent', signal);
@@ -671,19 +681,9 @@ export const runWriterAgent = async (
       }
     });
 
-    // Collect all streamed chunks into the full JSON string
-    let fullText = '';
-    let chunkCount = 0;
-    for await (const chunk of response) {
-      if (signal?.aborted) throw new Error('Operation cancelled by user.');
-      const part = chunk.text;
-      if (part) {
-        fullText += part;
-        chunkCount++;
-        if (onProgress && chunkCount % 20 === 0) onProgress(chunkCount);
-      }
-    }
-
+    const fullText = await collectStream(response, signal, (_part, count) => {
+      if (onProgress && count % 20 === 0) onProgress(count);
+    });
     if (!fullText) throw new Error("Writer returned empty script.");
 
     const rawScript = safeJsonParse<ScriptBlock[]>(fullText, 'Writer');
@@ -741,12 +741,7 @@ export const runDocumentaryActWriter = async (
       }
     });
 
-    let fullText = '';
-    for await (const chunk of stream) {
-      if (signal?.aborted) return null;
-      fullText += chunk.text ?? '';
-    }
-
+    const fullText = await collectStream(stream, signal);
     if (!fullText) throw new Error(`DocWriter ${act.block}: empty response`);
     return safeJsonParse<ScriptBlock[]>(fullText, `DocWriter ${act.block}`);
   }, `runDocumentaryActWriter:${act.block}`, signal);

@@ -5,6 +5,7 @@ import { APP_VERSION, CHARS_PER_SECOND, PROJECT_CONFIGS, DEMONETIZATION_BLACKLIS
 import { Action } from '../store/reducer';
 import { calculateDurationAndRetiming, translateBlockToRussian } from '../services/geminiService';
 import { getSettings } from '../appSettings';
+import { downloadBlob, safeFilename as safeName } from '../utils/exportHelpers';
 
 const PAGE_SIZE = 20;
 
@@ -105,19 +106,24 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
   // Group F: Inline editing
   const [editingCell, setEditingCell] = useState<{ idx: number; field: 'audioScript' } | null>(null);
   const [editValue, setEditValue] = useState('');
+  // Multi-select batch operations
+  const [selectedBlocks, setSelectedBlocks] = useState<Set<number>>(new Set());
 
   const filteredBlocks = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    return script.filter((b, i) => {
+    const result: { block: ScriptBlock; globalIdx: number }[] = [];
+    for (let i = 0; i < script.length; i++) {
+      const b = script[i];
       const typeMatch = filterType === 'ALL' || b.blockType === filterType;
-      if (!typeMatch) return false;
-      if (!q) return true;
-      return (
+      if (!typeMatch) continue;
+      if (q && !(
         b.audioScript?.toLowerCase().includes(q) ||
         b.russianScript?.toLowerCase().includes(q) ||
         b.visualCue?.toLowerCase().includes(q)
-      );
-    }).map((b, _, arr) => ({ block: b, globalIdx: script.indexOf(b) }));
+      )) continue;
+      result.push({ block: b, globalIdx: i });
+    }
+    return result;
   }, [script, searchQuery, filterType]);
 
   const totalPages = Math.ceil(filteredBlocks.length / PAGE_SIZE);
@@ -165,16 +171,18 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
     setLoadingImages(prev => prev.filter(i => i !== index));
   };
 
-  // Generate storyboard images for all blocks that don't have one yet, sequentially.
+  // Generate storyboard images for all blocks that don't have one yet, in parallel batches.
   const handleGenAllImages = async () => {
     if (!onGenerateImage || generatingAll) return;
     const missing = script.map((b, i) => i).filter(i => !script[i].imageUrl);
     if (!missing.length) return;
     setGeneratingAll(true);
     setLoadingImages(missing);
-    for (const i of missing) {
-      await onGenerateImage(i);
-      setLoadingImages(prev => prev.filter(idx => idx !== i));
+    const BATCH_SIZE = 5;
+    for (let b = 0; b < missing.length; b += BATCH_SIZE) {
+      const batch = missing.slice(b, b + BATCH_SIZE);
+      await Promise.allSettled(batch.map(i => onGenerateImage(i)));
+      setLoadingImages(prev => prev.filter(idx => !batch.includes(idx)));
     }
     setGeneratingAll(false);
   };
@@ -277,6 +285,28 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
       URL.revokeObjectURL(url);
     } catch (e) {
       setExportError(`CSV export failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    }
+  };
+
+  const handleExportJSON = () => {
+    try {
+      setExportError(null);
+      const payload = {
+        version: '3.4',
+        exportedAt: new Date().toISOString(),
+        topic,
+        projectType,
+        script,
+        radar: radarContent || null,
+        dossier: analystContent || null,
+        structure: architectContent || null,
+        thumbnailConcept: thumbnailConcept || null,
+        seo: seo || null,
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      downloadBlob(blob, `PROJECT_${safeName(topic)}.json`);
+    } catch (e) {
+      setExportError(`JSON export failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
     }
   };
 
@@ -761,6 +791,12 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
               Script (.json)
             </button>
             <button
+              onClick={handleExportJSON}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-900/40 hover:bg-emerald-800/60 border border-emerald-500/30 text-emerald-200 rounded text-xs uppercase font-bold tracking-wider transition-colors"
+            >
+              Project (.json)
+            </button>
+            <button
               onClick={handleDownloadAll}
               className="flex items-center gap-2 px-4 py-2 bg-cyan-900/40 hover:bg-cyan-800/60 border border-cyan-500/50 text-cyan-200 rounded text-xs uppercase font-bold tracking-wider transition-colors"
             >
@@ -967,6 +1003,63 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
           })()}
         </div>
 
+        {/* Batch Operations Toolbar */}
+        {dispatch && selectedBlocks.size > 0 && (
+          <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-mw-slate/20 bg-indigo-900/20">
+            <span className="text-[10px] text-indigo-300 font-mono uppercase tracking-wider font-bold">
+              {selectedBlocks.size} selected
+            </span>
+            <select
+              defaultValue=""
+              onChange={e => {
+                const newType = e.target.value;
+                if (!newType) return;
+                selectedBlocks.forEach(idx => {
+                  dispatch({ type: 'UPDATE_SCRIPT_BLOCK', index: idx, patch: { blockType: newType } });
+                });
+                e.target.value = '';
+              }}
+              className="px-2 py-1 text-[10px] font-mono uppercase rounded border border-indigo-500/30 bg-black/40 text-indigo-200 focus:outline-none"
+            >
+              <option value="">Change Type...</option>
+              {['HOOK', 'INTRO', 'BODY', 'TRANSITION', 'SALES', 'OUTRO'].map(t => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => {
+                if (!window.confirm(`Delete ${selectedBlocks.size} selected block(s)?`)) return;
+                const sorted = Array.from(selectedBlocks).sort((a, b) => b - a);
+                for (const idx of sorted) {
+                  dispatch({ type: 'DELETE_SCRIPT_BLOCK', index: idx });
+                }
+                setSelectedBlocks(new Set());
+              }}
+              className="px-3 py-1 text-[10px] font-mono uppercase rounded border border-red-500/30 text-red-300 hover:bg-red-900/30 transition-all"
+            >
+              Delete Selected
+            </button>
+            <button
+              onClick={() => setSelectedBlocks(new Set())}
+              className="px-3 py-1 text-[10px] font-mono uppercase rounded border border-mw-slate/30 text-mw-slate hover:text-white transition-all"
+            >
+              Clear Selection
+            </button>
+            <button
+              onClick={() => setSelectedBlocks(new Set(script.map((_, i) => i)))}
+              className="px-3 py-1 text-[10px] font-mono uppercase rounded border border-mw-slate/30 text-mw-slate hover:text-white transition-all"
+            >
+              Select All
+            </button>
+            <button
+              onClick={() => setSelectedBlocks(new Set())}
+              className="px-3 py-1 text-[10px] font-mono uppercase rounded border border-mw-slate/30 text-mw-slate hover:text-white transition-all"
+            >
+              Select None
+            </button>
+          </div>
+        )}
+
         {/* Pagination controls */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-b border-mw-slate/20 bg-black/20">
@@ -1005,6 +1098,17 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-mw-black text-xs uppercase tracking-wider text-mw-slate border-b border-mw-slate/50">
+                {dispatch && (
+                  <th className="p-4 w-10">
+                    <input
+                      type="checkbox"
+                      checked={selectedBlocks.size === script.length && script.length > 0}
+                      onChange={e => setSelectedBlocks(e.target.checked ? new Set(script.map((_, i) => i)) : new Set())}
+                      className="accent-red-500 cursor-pointer"
+                      title="Select all"
+                    />
+                  </th>
+                )}
                 <th className="p-4 w-28">Timing</th>
                 <th className="p-4 w-1/4">Visual (AI Storyboard)</th>
                 <th className="p-4 w-2/3">Audio (EN)</th>
@@ -1018,7 +1122,24 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
                 const translationRatio = enWords > 0 ? ruWords / enWords : 1;
                 const hasTranslationIssue = showTranslationIssues && enWords > 0 && translationRatio < 0.6;
                 return (
-                  <tr key={globalIdx} className={`hover:bg-mw-slate/5 transition-colors ${ttsPlaying && ttsBlock === globalIdx ? 'bg-mw-red/10 border-l-2 border-mw-red' : ''} ${hasTranslationIssue ? 'bg-yellow-900/10' : ''}`}>
+                  <tr key={globalIdx} className={`hover:bg-mw-slate/5 transition-colors ${ttsPlaying && ttsBlock === globalIdx ? 'bg-mw-red/10 border-l-2 border-mw-red' : ''} ${hasTranslationIssue ? 'bg-yellow-900/10' : ''} ${selectedBlocks.has(globalIdx) ? 'bg-indigo-900/15' : ''}`}>
+                    {dispatch && (
+                      <td className="p-4 align-top">
+                        <input
+                          type="checkbox"
+                          checked={selectedBlocks.has(globalIdx)}
+                          onChange={e => {
+                            setSelectedBlocks(prev => {
+                              const next = new Set(prev);
+                              if (e.target.checked) next.add(globalIdx);
+                              else next.delete(globalIdx);
+                              return next;
+                            });
+                          }}
+                          className="accent-red-500 cursor-pointer"
+                        />
+                      </td>
+                    )}
                     <td className="p-4 align-top text-mw-red font-bold whitespace-nowrap">
                       {block.timecode}
                       <div className="text-[10px] text-mw-slate mt-1 border border-mw-slate/30 rounded px-1 inline-block">

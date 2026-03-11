@@ -28,6 +28,7 @@ function load(): AppSettings {
   }
 }
 
+// @deprecated: use useSettings hook instead
 // Mutable singleton — updated by SettingsPanel, read by geminiService
 let _settings: AppSettings = load();
 

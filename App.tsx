@@ -2,7 +2,7 @@
 import React, { useState, useCallback, useEffect, useRef, useReducer } from 'react';
 import { parseCSVText, parseDocxText } from './utils/scriptImport';
 import { AgentType, INITIAL_STATE } from './types';
-import { APP_VERSION, PROJECT_CONFIGS, TOPIC_TEMPLATES } from './constants';
+import { APP_VERSION, PROJECT_CONFIGS, TOPIC_TEMPLATES, MAX_IMPORT_FILE_SIZE } from './constants';
 import { stateReducer } from './store/reducer';
 import { useAgentPipeline, isDocPipeline } from './hooks/useAgentPipeline';
 import { useHistory } from './hooks/useHistory';
@@ -413,6 +413,17 @@ function App() {
                     if (!file) return;
                     e.target.value = '';
 
+                    // File validation: size + extension
+                    if (file.size > MAX_IMPORT_FILE_SIZE) {
+                      addLog(`>>> IMPORT ERROR: File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Max is ${MAX_IMPORT_FILE_SIZE / 1024 / 1024} MB.`);
+                      return;
+                    }
+                    const ext = file.name.split('.').pop()?.toLowerCase();
+                    if (!ext || !['json', 'csv', 'doc', 'docx'].includes(ext)) {
+                      addLog(`>>> IMPORT ERROR: Unsupported file type ".${ext}". Use .json, .csv, .doc, or .docx.`);
+                      return;
+                    }
+
                     const importBlocks = (blocks: import('./types').ScriptBlock[]) => {
                       dispatch({ type: 'SET_FIELD', field: 'finalScript', value: blocks });
                       addLog(`>>> IMPORTED: ${blocks.length} blocks from "${file.name}"`);
@@ -516,21 +527,38 @@ function App() {
               const thisIdx = agentOrder.indexOf(step.id);
               const isPast = currentIdx > thisIdx;
               const canRerun = isPast && !state.isProcessing;
+              // Clear all downstream agent outputs when re-running from a specific step
+              const clearDownstream = (fromAgent: AgentType) => {
+                const order = agentOrder;
+                const idx = order.indexOf(fromAgent);
+                const toClear: Partial<import('./types').SystemState> = {};
+                for (let j = idx; j < order.length; j++) {
+                  const a = order[j];
+                  if (a === AgentType.RADAR) toClear.radarOutput = undefined;
+                  if (a === AgentType.ANALYST) toClear.researchDossier = undefined;
+                  if (a === AgentType.ARCHITECT) { toClear.structureMap = undefined; toClear.thumbnailConcept = undefined; }
+                  if (a === AgentType.DOC_CIRCLE) { toClear.docCircle = undefined; toClear.documentaryActs = undefined; }
+                  if (a === AgentType.ACT_PLANNING) toClear.actPlanning = undefined;
+                  if (a === AgentType.OUTLINER) toClear.scriptOutline = undefined;
+                  if (a === AgentType.WRITER) { toClear.finalScript = undefined; toClear.seoPackage = undefined; }
+                }
+                dispatch({ type: 'MERGE', partial: toClear });
+              };
               const rerunAction: (() => void) | null = (() => {
                 if (!canRerun) return null;
                 switch (step.id) {
-                  case AgentType.SCOUT:    return () => pipeline.executeScout();
-                  case AgentType.RADAR:    return state.topic ? () => pipeline.executeRadar() : null;
-                  case AgentType.ANALYST:  return state.radarOutput ? () => pipeline.executeAnalyst(state.radarOutput!) : null;
-                  case AgentType.ARCHITECT: return state.researchDossier ? () => pipeline.executeArchitect(state.researchDossier!) : null;
-                  case AgentType.DOC_CIRCLE: return (state.structureMap && state.researchDossier) ? () => pipeline.executeDocCircle(state.structureMap!, state.researchDossier!) : null;
-                  case AgentType.ACT_PLANNING: return (state.docCircle && state.structureMap && state.researchDossier) ? () => pipeline.executeActPlanning(state.docCircle!, state.structureMap!, state.researchDossier!) : null;
-                  case AgentType.OUTLINER: return (state.structureMap && state.researchDossier) ? () => pipeline.executeOutline(state.structureMap!, state.researchDossier!, state.docCircle, state.actPlanning) : null;
+                  case AgentType.SCOUT:    return () => { clearDownstream(AgentType.SCOUT); pipeline.executeScout(); };
+                  case AgentType.RADAR:    return state.topic ? () => { clearDownstream(AgentType.RADAR); pipeline.executeRadar(); } : null;
+                  case AgentType.ANALYST:  return state.radarOutput ? () => { clearDownstream(AgentType.ANALYST); pipeline.executeAnalyst(state.radarOutput!); } : null;
+                  case AgentType.ARCHITECT: return state.researchDossier ? () => { clearDownstream(AgentType.ARCHITECT); pipeline.executeArchitect(state.researchDossier!); } : null;
+                  case AgentType.DOC_CIRCLE: return (state.structureMap && state.researchDossier) ? () => { clearDownstream(AgentType.DOC_CIRCLE); pipeline.executeDocCircle(state.structureMap!, state.researchDossier!); } : null;
+                  case AgentType.ACT_PLANNING: return (state.docCircle && state.structureMap && state.researchDossier) ? () => { clearDownstream(AgentType.ACT_PLANNING); pipeline.executeActPlanning(state.docCircle!, state.structureMap!, state.researchDossier!); } : null;
+                  case AgentType.OUTLINER: return (state.structureMap && state.researchDossier) ? () => { clearDownstream(AgentType.OUTLINER); pipeline.executeOutline(state.structureMap!, state.researchDossier!, state.docCircle, state.actPlanning); } : null;
                   case AgentType.WRITER: {
                     if (isDocPipeline(state.projectType) && state.documentaryActs && state.researchDossier)
-                      return () => pipeline.executeDocumentaryWriter(state.documentaryActs!, state.researchDossier!);
+                      return () => { clearDownstream(AgentType.WRITER); pipeline.executeDocumentaryWriter(state.documentaryActs!, state.researchDossier!); };
                     if (state.structureMap && state.researchDossier)
-                      return () => pipeline.executeWriter(state.structureMap!, state.researchDossier!, state.scriptOutline);
+                      return () => { clearDownstream(AgentType.WRITER); pipeline.executeWriter(state.structureMap!, state.researchDossier!, state.scriptOutline); };
                     return null;
                   }
                   default: return null;
