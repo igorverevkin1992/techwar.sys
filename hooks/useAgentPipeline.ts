@@ -22,7 +22,44 @@ import { AGENT_MODELS, PROJECT_CONFIGS, DEMONETIZATION_BLACKLIST } from '../cons
 import { getSettings } from '../appSettings';
 
 // Helper: true for any project type that uses the documentary pipeline (DocCircle → ActPlanning → Outline → multi-pass Writer)
-export const isDocPipeline = (pt: string): boolean => pt === 'documentary' || pt === 'short_doc';
+export const isDocPipeline = (pt: string): boolean => pt === 'short_doc';
+
+// Helper: validate script structure rules and return human-readable warnings
+function validateScriptStructure(script: ScriptBlock[], projectType: string): string[] {
+  const warnings: string[] = [];
+  const counts: Record<string, number> = {};
+  for (const b of script) counts[b.blockType] = (counts[b.blockType] ?? 0) + 1;
+
+  if ((counts['HOOK'] ?? 0) === 0) warnings.push('No HOOK block found — video lacks an opening hook.');
+  if ((counts['OUTRO'] ?? 0) === 0) warnings.push('No OUTRO block found — video has no closing.');
+
+  if (projectType === 'youtube') {
+    if ((counts['HOOK'] ?? 0) > 1) warnings.push(`${counts['HOOK']} HOOK blocks — YouTube format should have exactly 1.`);
+    if ((counts['SALES'] ?? 0) > 2) warnings.push(`${counts['SALES']} SALES blocks — YouTube format should have ≤2.`);
+  } else if (projectType === 'short_doc') {
+    if ((counts['SALES'] ?? 0) > 1) warnings.push(`${counts['SALES']} SALES blocks — Short Doc format should have ≤1.`);
+  }
+
+  if (script[0]?.blockType !== 'HOOK') warnings.push('First block is not HOOK — consider reordering.');
+  if (script[script.length - 1]?.blockType !== 'OUTRO') warnings.push('Last block is not OUTRO — consider reordering.');
+
+  return warnings;
+}
+
+// Helper: extract motif seeds from actPlanning text for parallel documentary writing
+function extractMotifSeeds(actPlanningText: string): string {
+  if (!actPlanningText) return '';
+  const lines = actPlanningText.split('\n');
+  // Pick lines that describe motifs, themes, recurring phrases (heuristic: look for "motif", "theme", "recurring", "symbol", first 30 lines for structure)
+  const motifLines = lines.filter(l =>
+    /motif|theme|recurring|symbol|leitmotif|visual metaphor|anchor/i.test(l)
+  ).slice(0, 8);
+  if (!motifLines.length) {
+    // Fallback: take first 10 lines of act planning as structural seeds
+    return lines.slice(0, 10).join('\n');
+  }
+  return `Motifs from Act Planning:\n${motifLines.join('\n')}`;
+}
 
 // Helper: converts ResearchDossier object to readable string
 export const formatDossierToString = (d: ResearchDossier): string => {
@@ -143,6 +180,13 @@ export function useAgentPipeline({
       dispatch({ type: 'MERGE', partial: { lastError: warning } });
     }
 
+    // Structure validation
+    const structureWarnings = validateScriptStructure(script, projectType);
+    if (structureWarnings.length) {
+      addLog(`>>> STRUCTURE WARNINGS (${structureWarnings.length}):`);
+      structureWarnings.forEach(w => addLog(`  ⚠ ${w}`));
+    }
+
     addLog('>>> SCRIPT GENERATED.');
     const { topic, history, radarOutput, researchDossier, structureMap, thumbnailConcept } = stateRef.current;
     const updatedHistory = await saveToHistory(topic, AGENT_MODELS.WRITER, script, history, projectType, radarOutput, researchDossier, structureMap, thumbnailConcept);
@@ -188,12 +232,14 @@ export function useAgentPipeline({
     const useParallel = getSettings().parallelActWriting;
 
     if (useParallel) {
-      addLog(`>>> MODE: PARALLEL — all ${acts.length} acts writing simultaneously (no motif tracking).`);
+      // Extract motif seeds from actPlanning to provide structural continuity even in parallel mode
+      const seedMotifs = extractMotifSeeds(scriptOutline ?? '');
+      addLog(`>>> MODE: PARALLEL — all ${acts.length} acts writing simultaneously (seed motifs injected).`);
       dispatch({ type: 'MERGE', partial: { currentWritingAct: 0 } });
       const results = await Promise.all(
         acts.map((act, i) => {
           addLog(`>>> ACT ${i + 1}/${acts.length}: ${act.block} [parallel]...`);
-          return runDocumentaryActWriter(act, acts, inputDossier, [], controller.signal, scriptOutline, projectType);
+          return runDocumentaryActWriter(act, acts, inputDossier, [], controller.signal, scriptOutline, projectType, seedMotifs || undefined);
         })
       );
       for (let i = 0; i < results.length; i++) {
@@ -239,7 +285,7 @@ export function useAgentPipeline({
     }
 
     const retimed = calculateDurationAndRetiming(allBlocks);
-    const config = PROJECT_CONFIGS[stateRef.current.projectType] ?? PROJECT_CONFIGS['documentary'];
+    const config = PROJECT_CONFIGS[stateRef.current.projectType] ?? PROJECT_CONFIGS['short_doc'];
     const totalChars = retimed.reduce((sum, b) => sum + (b.audioScript?.length ?? 0), 0);
     const estMin = (totalChars / 900).toFixed(1);
     addLog(`>>> DOCUMENTARY: ${retimed.length} blocks, ~${estMin} min (${totalChars.toLocaleString()} chars).`);
@@ -247,6 +293,13 @@ export function useAgentPipeline({
       const warning = `Documentary too short: ~${estMin} min. Min is 60 min. Consider re-running Writer.`;
       addLog(`>>> WARNING: ${warning}`);
       dispatch({ type: 'MERGE', partial: { lastError: warning } });
+    }
+
+    // Structure validation
+    const docStructureWarnings = validateScriptStructure(retimed, stateRef.current.projectType);
+    if (docStructureWarnings.length) {
+      addLog(`>>> STRUCTURE WARNINGS (${docStructureWarnings.length}):`);
+      docStructureWarnings.forEach(w => addLog(`  ⚠ ${w}`));
     }
 
     addLog('>>> DOCUMENTARY SCRIPT GENERATED.');
@@ -631,10 +684,10 @@ export function useAgentPipeline({
 
   // ── AUDIT FIX ────────────────────────────────────────────────────────────────
   const executeAuditFix = useCallback(async () => {
-    const { finalScript, projectType } = stateRef.current;
+    const { finalScript } = stateRef.current;
     if (!finalScript?.length) return;
 
-    const maxSales = projectType === 'documentary' ? 4 : 1;
+    const maxSales = 1;
 
     // ── Pass 1: Instant structural fixes (no AI) ──────────────────────────────
     const fixed = [...finalScript];
@@ -654,12 +707,6 @@ export function useAgentPipeline({
       const p1 = Math.floor(fixed.length * 0.33);
       fixed[p1] = { ...fixed[p1], blockType: 'SALES' };
       structLog.push(`SALES inserted at block[${p1}]`);
-      if (projectType === 'documentary') {
-        const p2 = Math.floor(fixed.length * 0.66);
-        fixed[p2] = { ...fixed[p2], blockType: 'SALES' };
-        structLog.push(`SALES inserted at block[${p2}]`);
-      }
-    } else if (salesIdxs.length > maxSales) {
       salesIdxs.slice(maxSales).forEach(i => { fixed[i] = { ...fixed[i], blockType: 'TRANSITION' }; });
       structLog.push(`${salesIdxs.length - maxSales} excess SALES → TRANSITION`);
     }

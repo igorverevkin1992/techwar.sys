@@ -9,6 +9,7 @@ interface StepEditorProps {
   borderColor: string;
   textColor: string;
   height?: string;
+  onAutoRun?: () => void;
 }
 
 type DiffRow = {
@@ -40,6 +41,7 @@ const StepEditor: React.FC<StepEditorProps> = memo(({
   borderColor,
   textColor,
   height = 'h-96',
+  onAutoRun,
 }) => {
   const [showDiff, setShowDiff] = useState(false);
 
@@ -126,7 +128,7 @@ const StepEditor: React.FC<StepEditorProps> = memo(({
         />
       )}
 
-      <div className="mt-4 flex items-center justify-between">
+      <div className="mt-4 flex items-center justify-between gap-2">
         {originalValue !== undefined ? (
           <button
             onClick={() => { onChange(originalValue); setShowDiff(false); }}
@@ -137,12 +139,23 @@ const StepEditor: React.FC<StepEditorProps> = memo(({
             ↩ Revert
           </button>
         ) : <span />}
-        <button
-          onClick={onApprove}
-          className="bg-mw-red text-white px-6 py-2 rounded font-bold uppercase tracking-wider text-xs hover:bg-red-600 transition-colors"
-        >
-          {approveLabel}
-        </button>
+        <div className="flex items-center gap-2">
+          {onAutoRun && (
+            <button
+              onClick={onAutoRun}
+              className="font-mono text-xs border border-cyan-500/50 text-cyan-300 px-4 py-2 rounded hover:bg-cyan-900/30 hover:border-cyan-400 transition-all"
+              title="Approve and run all remaining steps automatically (no more pauses)"
+            >
+              ▶▶ Auto-run remaining
+            </button>
+          )}
+          <button
+            onClick={onApprove}
+            className="bg-mw-red text-white px-6 py-2 rounded font-bold uppercase tracking-wider text-xs hover:bg-red-600 transition-colors"
+          >
+            {approveLabel}
+          </button>
+        </div>
       </div>
     </div>
   );

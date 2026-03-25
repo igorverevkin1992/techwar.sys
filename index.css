@@ -1,32 +1,38 @@
 @import "tailwindcss";
 
-/* Custom theme colors */
+/* Custom theme colors — TECH.WAR neon palette */
 @theme {
-  --color-mw-black: #0a0a0a;
-  --color-mw-red: #dc2626;
-  --color-mw-gray: #1f2937;
-  --color-mw-slate: #475569;
+  --color-mw-black: #03050f;
+  --color-mw-red: #00e5ff;
+  --color-mw-gray: #080d1a;
+  --color-mw-slate: #2d5a7a;
 
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 /* Base styles */
 body {
-  background-color: #0a0a0a;
-  color: #e2e8f0;
+  background-color: #03050f;
+  color: #cde8f0;
+  background-image:
+    linear-gradient(rgba(0, 229, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 229, 255, 0.02) 1px, transparent 1px);
+  background-size: 40px 40px;
 }
 
-/* Custom scrollbar for terminal look */
+/* Custom scrollbar — neon terminal look */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #0a0a0a;
+  background: #03050f;
 }
 ::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: #00e5ff33;
+  border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: #00e5ff66;
+  box-shadow: 0 0 6px #00e5ff;
 }

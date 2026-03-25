@@ -15,7 +15,7 @@ const ErrorToast: React.FC<ErrorToastProps> = ({ message, onClose }) => {
   }, [message]);
 
   return (
-    <div className="fixed bottom-6 right-6 z-[200] max-w-md bg-red-950 border border-mw-red rounded-lg p-4 shadow-[0_0_20px_rgba(220,38,38,0.4)] flex items-start gap-3 animate-in slide-in-from-right">
+    <div className="fixed bottom-6 right-6 z-[200] max-w-md bg-cyan-950 border border-mw-red rounded-lg p-4 shadow-[0_0_20px_rgba(0,229,255,0.4)] flex items-start gap-3 animate-in slide-in-from-right">
       <div className="w-2 h-2 bg-mw-red rounded-full mt-1.5 flex-shrink-0 animate-pulse" />
       <div className="flex-1 min-w-0">
         <div className="text-xs font-bold uppercase tracking-wider text-mw-red mb-1 font-mono">SYSTEM ERROR</div>

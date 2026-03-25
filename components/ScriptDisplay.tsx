@@ -40,14 +40,6 @@ function highlightText(text: string, query: string): React.ReactNode {
   );
 }
 
-// HTML-escape to prevent XSS in exported documents
-const escapeHtml = (str: string): string =>
-  str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
 
 const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
   script,
@@ -110,7 +102,7 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
 
   const filteredBlocks = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    return script.filter((b, i) => {
+    return script.filter((b, _i) => {
       const typeMatch = filterType === 'ALL' || b.blockType === filterType;
       if (!typeMatch) return false;
       if (!q) return true;
@@ -119,7 +111,7 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
         b.russianScript?.toLowerCase().includes(q) ||
         b.visualCue?.toLowerCase().includes(q)
       );
-    }).map((b, _, arr) => ({ block: b, globalIdx: script.indexOf(b) }));
+    }).map((b) => ({ block: b, globalIdx: script.indexOf(b) }));
   }, [script, searchQuery, filterType]);
 
   const totalPages = Math.ceil(filteredBlocks.length / PAGE_SIZE);
@@ -127,13 +119,22 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
     () => filteredBlocks.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
     [filteredBlocks, page]
   );
-  // Global index offset so generate-image still gets the correct index
-  const pageOffset = page * PAGE_SIZE;
+  // Jump-navigation: find the page of the first block with a given type in filteredBlocks
+  const jumpToType = (blockType: string) => {
+    const idx = filteredBlocks.findIndex(({ block }) => block.blockType === blockType);
+    if (idx === -1) return;
+    const targetPage = Math.floor(idx / PAGE_SIZE);
+    setPage(targetPage);
+    tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
-  // Total audioScript character count and estimated duration
-  const { totalAudioChars, estMinutes } = useMemo(() => {
+  // Total audioScript character count, estimated duration, word count, and block type distribution
+  const { totalAudioChars, estMinutes, wordCount, blockTypeCounts } = useMemo(() => {
     const total = script.reduce((sum, b) => sum + (b.audioScript?.length ?? 0), 0);
-    return { totalAudioChars: total, estMinutes: (total / (CHARS_PER_SECOND * 60)).toFixed(1) };
+    const words = script.reduce((sum, b) => sum + (b.audioScript?.split(/\s+/).filter(Boolean).length ?? 0), 0);
+    const counts: Record<string, number> = {};
+    for (const b of script) { counts[b.blockType] = (counts[b.blockType] ?? 0) + 1; }
+    return { totalAudioChars: total, estMinutes: (total / (CHARS_PER_SECOND * 60)).toFixed(1), wordCount: words, blockTypeCounts: counts };
   }, [script]);
 
   // Pre-compute audit warning count for Audit button badge
@@ -144,7 +145,7 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
     if (script.filter(b => (b.audioScript || '').split(/\s+/).filter(Boolean).length < 30).length) count++;
     if (script[0]?.blockType !== 'HOOK') count++;
     if (script[script.length - 1]?.blockType !== 'OUTRO') count++;
-    const maxSalesAudit = projectType === 'documentary' ? 4 : 1;
+    const maxSalesAudit = 1;
     const salesCount = script.filter(b => b.blockType === 'SALES').length;
     if (salesCount === 0 || salesCount > maxSalesAudit) count++;
     let maxRun = 0, curRun = 1;
@@ -155,7 +156,7 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
     const estMin = parseFloat(estMinutes);
     const cfg = PROJECT_CONFIGS[projectType];
     const minDur = cfg.minChars / (CHARS_PER_SECOND * 60);
-    const maxDur = projectType === 'documentary' ? 9999 : 20;
+    const maxDur = 20;
     if (estMin < minDur || estMin > maxDur) count++;
     return count;
   }, [script, projectType, estMinutes]);
@@ -204,7 +205,7 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
       ];
       const children: Paragraph[] = [
         new Paragraph({ text: `INTELLIGENCE DOSSIER: ${topic}`, heading: HeadingLevel.HEADING_1 }),
-        new Paragraph({ children: [new TextRun({ text: `NARRATIVE.WAR V${APP_VERSION} // RESEARCH DATA ONLY`, bold: true })] }),
+        new Paragraph({ children: [new TextRun({ text: `TECH.WAR V${APP_VERSION} // RESEARCH DATA ONLY`, bold: true })] }),
         new Paragraph({ text: `Generated: ${new Date().toLocaleString()}` }),
         new Paragraph({ text: '' }),
       ];
@@ -228,7 +229,7 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
       setExportError(null);
       const children: Paragraph[] = [
         new Paragraph({ text: `SCRIPT: ${topic}`, heading: HeadingLevel.HEADING_1 }),
-        new Paragraph({ children: [new TextRun({ text: `NARRATIVE.WAR V${APP_VERSION} // PRODUCTION SCRIPT`, bold: true })] }),
+        new Paragraph({ children: [new TextRun({ text: `TECH.WAR V${APP_VERSION} // PRODUCTION SCRIPT`, bold: true })] }),
         new Paragraph({ text: `Generated: ${new Date().toLocaleString()}` }),
         new Paragraph({ text: '' }),
         new Paragraph({ text: 'FINAL SCRIPT', heading: HeadingLevel.HEADING_2 }),
@@ -335,7 +336,7 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
 
       const children: Paragraph[] = [
         new Paragraph({ text: `SHOT LIST / B-ROLL BRIEF: ${topic}`, heading: HeadingLevel.HEADING_1 }),
-        new Paragraph({ children: [new TextRun({ text: `NARRATIVE.WAR V${APP_VERSION} // PRODUCTION BRIEF`, bold: true })] }),
+        new Paragraph({ children: [new TextRun({ text: `TECH.WAR V${APP_VERSION} // PRODUCTION BRIEF`, bold: true })] }),
         new Paragraph({ text: `Generated: ${new Date().toLocaleString()}` }),
         new Paragraph({ text: '' }),
       ];
@@ -498,6 +499,71 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
     }
   };
 
+  const handleExportMarkdown = () => {
+    try {
+      setExportError(null);
+      const lines: string[] = [`# ${topic}`, ``, `> Generated by TECH.WAR V${APP_VERSION} — ${new Date().toLocaleString()}`, ``];
+      for (const block of script) {
+        lines.push(`## \`${block.timecode}\` [${block.blockType}]`);
+        lines.push(`**Visual:** ${block.visualCue}`);
+        if (block.overlayFX) lines.push(`**FX:** ${block.overlayFX}`);
+        lines.push(``);
+        lines.push(block.audioScript);
+        if (block.russianScript) lines.push(``, `> ${block.russianScript}`);
+        lines.push(``, `---`, ``);
+      }
+      const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8;' });
+      saveBlob(blob, `SCRIPT_${safeFilename}.md`);
+    } catch (e) {
+      setExportError(`Markdown export failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    }
+  };
+
+  const handleExportPDF = () => {
+    const win = window.open('', '_blank');
+    if (!win) { setExportError('PDF export: browser blocked popup. Allow popups for this site.'); return; }
+    const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const rows = script.map(b => `
+      <tr class="block-row bt-${b.blockType.toLowerCase()}">
+        <td class="tc">${esc(b.timecode)}</td>
+        <td class="bt">${esc(b.blockType)}</td>
+        <td class="visual">${esc(b.visualCue)}</td>
+        <td class="audio">${esc(b.audioScript)}</td>
+        ${b.russianScript ? `<td class="ru">${esc(b.russianScript)}</td>` : '<td class="ru"></td>'}
+      </tr>`).join('');
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>${esc(topic)} — Script</title>
+<style>
+  body { font-family: Arial, sans-serif; font-size: 10pt; color: #111; margin: 1cm; }
+  h1 { font-size: 14pt; margin-bottom: 4px; }
+  .meta { font-size: 8pt; color: #666; margin-bottom: 12px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #ccc; padding: 4px 6px; vertical-align: top; text-align: left; }
+  th { background: #222; color: #fff; font-size: 8pt; text-transform: uppercase; }
+  td.tc { width: 90px; font-family: monospace; font-size: 8pt; white-space: nowrap; }
+  td.bt { width: 60px; font-weight: bold; font-size: 8pt; }
+  td.visual { width: 18%; font-style: italic; font-size: 8pt; color: #444; }
+  td.audio { width: 36%; }
+  td.ru { width: 30%; color: #333; font-size: 9pt; }
+  .bt-hook td { background: #fff3f3; }
+  .bt-sales td { background: #fffbe6; }
+  .bt-outro td { background: #f0f8f0; }
+  @media print { body { margin: 0.5cm; } }
+</style></head><body>
+<h1>${esc(topic)}</h1>
+<div class="meta">TECH.WAR V${APP_VERSION} · ${new Date().toLocaleString()} · ${script.length} blocks</div>
+<table>
+  <thead><tr>
+    <th>Timecode</th><th>Type</th><th>Visual</th><th>Audio (EN)</th><th>Audio (RU)</th>
+  </tr></thead>
+  <tbody>${rows}</tbody>
+</table>
+</body></html>`);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); }, 400);
+  };
+
   const handleDownloadAll = async () => {
     try {
       setExportError(null);
@@ -507,7 +573,7 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
       // script.docx
       const scriptDocChildren: Paragraph[] = [
         new Paragraph({ text: `SCRIPT: ${topic}`, heading: HeadingLevel.HEADING_1 }),
-        new Paragraph({ children: [new TextRun({ text: `NARRATIVE.WAR V${APP_VERSION} // PRODUCTION SCRIPT`, bold: true })] }),
+        new Paragraph({ children: [new TextRun({ text: `TECH.WAR V${APP_VERSION} // PRODUCTION SCRIPT`, bold: true })] }),
         new Paragraph({ text: `Generated: ${new Date().toLocaleString()}` }),
         new Paragraph({ text: '' }),
         new Paragraph({ text: 'FINAL SCRIPT', heading: HeadingLevel.HEADING_2 }),
@@ -619,7 +685,7 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
             <img
               src={selectedImage}
               alt="Full Size Storyboard"
-              className="max-w-full max-h-[85vh] rounded border border-mw-red/50 shadow-[0_0_50px_rgba(220,38,38,0.3)] object-contain"
+              className="max-w-full max-h-[85vh] rounded border border-mw-red/50 shadow-[0_0_50px_rgba(0,229,255,0.3)] object-contain"
             />
             <div className="mt-4 text-white text-xs font-mono opacity-70 bg-black/50 px-3 py-1 rounded">
               CLICK ANYWHERE TO CLOSE
@@ -637,11 +703,29 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
                 Final Generated Script
               </h2>
               <p className="text-xs text-mw-slate mt-1 font-mono">
-                NARRATIVE.WAR V{APP_VERSION} // {script.length} BLOCKS // ~{estMinutes} MIN ({totalAudioChars.toLocaleString()} CHARS)
+                TECH.WAR V{APP_VERSION} // {script.length} BLOCKS // ~{estMinutes} MIN // {wordCount.toLocaleString()} WORDS ({totalAudioChars.toLocaleString()} CHARS)
                 {totalAudioChars < MIN_AUDIO_CHARS && (
                   <span className="text-yellow-400 ml-2">⚠ SHORT (min {MIN_AUDIO_CHARS.toLocaleString()})</span>
                 )}
               </p>
+              {/* Block type distribution bar */}
+              {script.length > 0 && (
+                <div className="flex items-center gap-1 mt-2">
+                  {(['HOOK','INTRO','BODY','TRANSITION','SALES','OUTRO'] as const).filter(t => blockTypeCounts[t]).map(t => {
+                    const pct = Math.round((blockTypeCounts[t] / script.length) * 100);
+                    const colors: Record<string, string> = { HOOK: 'bg-red-500', INTRO: 'bg-blue-500', BODY: 'bg-slate-500', TRANSITION: 'bg-green-600', SALES: 'bg-orange-500', OUTRO: 'bg-purple-500' };
+                    return (
+                      <div key={t} title={`${t}: ${blockTypeCounts[t]} blocks (${pct}%)`} className={`${colors[t]} h-1.5 rounded-full`} style={{ width: `${pct}%`, minWidth: '4px' }} />
+                    );
+                  })}
+                  <div className="flex flex-wrap gap-x-2 ml-1">
+                    {(['HOOK','INTRO','BODY','TRANSITION','SALES','OUTRO'] as const).filter(t => blockTypeCounts[t]).map(t => {
+                      const dotColors: Record<string, string> = { HOOK: 'text-red-400', INTRO: 'text-blue-400', BODY: 'text-slate-400', TRANSITION: 'text-green-400', SALES: 'text-orange-400', OUTRO: 'text-purple-400' };
+                      return <span key={t} className={`text-[9px] font-mono ${dotColors[t]}`}>{t[0]}:{blockTypeCounts[t]}</span>;
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Undo / Redo */}
@@ -756,6 +840,18 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
               Script (.json)
             </button>
             <button
+              onClick={handleExportMarkdown}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-800/60 hover:bg-slate-700/60 border border-slate-400/30 text-slate-200 rounded text-xs uppercase font-bold tracking-wider transition-colors"
+            >
+              Script (.md)
+            </button>
+            <button
+              onClick={handleExportPDF}
+              className="flex items-center gap-2 px-4 py-2 bg-red-900/40 hover:bg-red-800/60 border border-red-500/30 text-red-200 rounded text-xs uppercase font-bold tracking-wider transition-colors"
+            >
+              Script (PDF)
+            </button>
+            <button
               onClick={handleDownloadAll}
               className="flex items-center gap-2 px-4 py-2 bg-cyan-900/40 hover:bg-cyan-800/60 border border-cyan-500/50 text-cyan-200 rounded text-xs uppercase font-bold tracking-wider transition-colors"
             >
@@ -803,6 +899,20 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
             <span className="text-[10px] text-mw-slate font-mono ml-auto">
               {filteredBlocks.length}/{script.length} blocks
             </span>
+            {/* Jump-to buttons */}
+            {(['HOOK','BODY','SALES','OUTRO'] as const).filter(t => blockTypeCounts[t]).map(t => {
+              const jumpColors: Record<string, string> = { HOOK: 'text-red-400 border-red-500/30 hover:border-red-400', BODY: 'text-slate-400 border-slate-500/30 hover:border-slate-400', SALES: 'text-orange-400 border-orange-500/30 hover:border-orange-400', OUTRO: 'text-purple-400 border-purple-500/30 hover:border-purple-400' };
+              return (
+                <button
+                  key={t}
+                  onClick={() => jumpToType(t)}
+                  title={`Jump to first ${t} block`}
+                  className={`px-2 py-1 text-[10px] font-mono uppercase rounded border transition-all ${jumpColors[t]}`}
+                >
+                  ↓{t}
+                </button>
+              );
+            })}
             <button
               onClick={() => setShowTranslationIssues(v => !v)}
               className={`px-3 py-1 text-[10px] font-mono uppercase rounded border transition-all ${showTranslationIssues ? 'border-yellow-400 text-yellow-300 bg-yellow-900/20' : 'border-mw-slate/30 text-mw-slate hover:border-yellow-400/60'}`}
@@ -890,7 +1000,7 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
             if (shortBlocks.length) auditIssues.push({ type: 'warn', msg: `${shortBlocks.length} block(s) with < 30 words` });
             if (script[0]?.blockType !== 'HOOK') auditIssues.push({ type: 'warn', msg: 'First block is not HOOK' });
             if (script[script.length - 1]?.blockType !== 'OUTRO') auditIssues.push({ type: 'warn', msg: 'Last block is not OUTRO' });
-            const maxSales = projectType === 'documentary' ? 4 : 1;
+            const maxSales = 1;
             const salesCount = script.filter(b => b.blockType === 'SALES').length;
             if (salesCount === 0) auditIssues.push({ type: 'warn', msg: 'No SALES blocks' });
             if (salesCount > maxSales) auditIssues.push({ type: 'warn', msg: `${salesCount} SALES blocks (max ${maxSales})` });
@@ -902,7 +1012,7 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
             const estMin = parseFloat(estMinutes);
             const cfg = PROJECT_CONFIGS[projectType];
             const minDur = cfg.minChars / (CHARS_PER_SECOND * 60);
-            const maxDur = projectType === 'documentary' ? 9999 : 20;
+            const maxDur = 20;
             if (estMin >= minDur && estMin <= maxDur) auditIssues.push({ type: 'ok', msg: `Duration ${estMinutes} min — OK` });
             else auditIssues.push({ type: 'warn', msg: `Duration ${estMinutes} min — out of ${cfg.description} target` });
             auditIssues.push({ type: 'ok', msg: `${script.length} total blocks` });
@@ -1122,9 +1232,11 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
                         </div>
                       )}
                       {/* Stale RU indicator + translate button */}
-                      {dispatch && block.ruStale && block.russianScript && (
+                      {dispatch && block.audioScript && (block.ruStale || !block.russianScript) && (
                         <div className="mt-1.5 flex items-center gap-2">
-                          <span className="text-[10px] text-yellow-400 font-mono">⚠ RU outdated</span>
+                          {block.ruStale && block.russianScript && (
+                            <span className="text-[10px] text-yellow-400 font-mono">⚠ RU outdated</span>
+                          )}
                           <button
                             disabled={translatingBlocks.includes(globalIdx)}
                             onClick={async () => {
@@ -1135,7 +1247,7 @@ const ScriptDisplay: React.FC<ScriptDisplayProps> = ({
                               }
                               setTranslatingBlocks(prev => prev.filter(i => i !== globalIdx));
                             }}
-                            className="text-[10px] px-2 py-0.5 rounded border border-yellow-500/40 text-yellow-300 hover:bg-yellow-900/20 transition-all disabled:opacity-40"
+                            className={`text-[10px] px-2 py-0.5 rounded border transition-all disabled:opacity-40 ${block.ruStale ? 'border-yellow-500/40 text-yellow-300 hover:bg-yellow-900/20' : 'border-mw-slate/40 text-mw-slate hover:border-blue-500/40 hover:text-blue-300 hover:bg-blue-900/10'}`}
                           >
                             {translatingBlocks.includes(globalIdx) ? '…translating' : '↻ Translate RU'}
                           </button>

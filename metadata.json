@@ -1,5 +1,5 @@
 {
-  "name": "NARRATIVE.WAR",
+  "name": "TECH.WAR",
   "description": "An autonomous AI video production system. Features a Chain of Agents (Scout, Radar, Analyst, Architect, Writer) to generate visually-oriented, retention-optimized video scripts based on Global South geopolitical narratives.",
   "requestFramePermissions": []
 }

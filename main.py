@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from scripts.style_search import get_style_examples
+from scripts.screenwriting_search import get_screenwriting_principles
 
 PROXY_RETRY_COUNT = 3
 PROXY_RETRY_BASE_MS = 1500  # ms, doubles each attempt
@@ -57,6 +58,18 @@ async def get_style(request: TopicRequest):
     try:
         style_context = get_style_examples(request.topic, k=request.k)
         return {"topic": request.topic, "style_context": style_context}
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/get-screenwriting-principles")
+async def get_principles(request: TopicRequest):
+    """Returns Tyler Mowery structural principles from ChromaDB for a given agent context."""
+    print(f"📥 Principles request for: {request.topic} (k={request.k})")
+    try:
+        principles_context = get_screenwriting_principles(request.topic, k=request.k)
+        return {"topic": request.topic, "principles_context": principles_context}
     except Exception as e:
         print(f"❌ Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

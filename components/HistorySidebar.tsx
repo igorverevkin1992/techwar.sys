@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useState, useMemo } from 'react';
 import { HistoryItem } from '../types';
 
 interface HistorySidebarProps {
@@ -11,14 +11,21 @@ interface HistorySidebarProps {
   inline?: boolean;
 }
 
-const HistoryList: React.FC<Pick<HistorySidebarProps, 'history' | 'onSelect' | 'onDelete'>> = ({ history, onSelect, onDelete }) => (
+const HistoryList: React.FC<Pick<HistorySidebarProps, 'history' | 'onSelect' | 'onDelete'> & { searchQuery?: string }> = ({ history, onSelect, onDelete, searchQuery = '' }) => {
+  const filtered = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return history;
+    return history.filter(h => h.topic.toLowerCase().includes(q));
+  }, [history, searchQuery]);
+
+  return (
   <div className="space-y-3">
-    {history.length === 0 ? (
+    {filtered.length === 0 ? (
       <div className="text-center text-mw-slate text-xs mt-10">
-        NO PROJECTS SAVED
+        {searchQuery ? 'NO MATCHING PROJECTS' : 'NO PROJECTS SAVED'}
       </div>
     ) : (
-      history.map((item) => (
+      filtered.map((item) => (
         <div
           key={item.id}
           onClick={() => onSelect(item)}
@@ -57,17 +64,33 @@ const HistoryList: React.FC<Pick<HistorySidebarProps, 'history' | 'onSelect' | '
       ))
     )}
   </div>
-);
+  );
+};
 
 const HistorySidebar: React.FC<HistorySidebarProps> = memo(({ history, isOpen, onClose, onSelect, onDelete, inline }) => {
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const searchInput = (
+    <input
+      type="text"
+      value={searchQuery}
+      onChange={e => setSearchQuery(e.target.value)}
+      placeholder="Search projects..."
+      className="w-full px-3 py-1.5 bg-black/40 border border-mw-slate/40 rounded text-xs font-mono text-white placeholder-mw-slate/50 focus:outline-none focus:border-mw-red/60"
+    />
+  );
+
   // Inline mode: renders as a full-page content block (no overlay, no fixed positioning)
   if (inline) {
     return (
       <div className="space-y-4">
-        <div className="text-xs font-bold text-mw-slate uppercase tracking-widest">
-          Saved Projects ({history.length})
+        <div className="flex items-center justify-between">
+          <div className="text-xs font-bold text-mw-slate uppercase tracking-widest">
+            Saved Projects ({history.length})
+          </div>
         </div>
-        <HistoryList history={history} onSelect={onSelect} onDelete={onDelete} />
+        {searchInput}
+        <HistoryList history={history} onSelect={onSelect} onDelete={onDelete} searchQuery={searchQuery} />
       </div>
     );
   }
@@ -90,8 +113,11 @@ const HistorySidebar: React.FC<HistorySidebarProps> = memo(({ history, isOpen, o
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
           </button>
         </div>
+        <div className="px-4 pt-3 pb-2 border-b border-mw-slate/20">
+          {searchInput}
+        </div>
         <div className="flex-1 overflow-y-auto p-4">
-          <HistoryList history={history} onSelect={onSelect} onDelete={onDelete} />
+          <HistoryList history={history} onSelect={onSelect} onDelete={onDelete} searchQuery={searchQuery} />
         </div>
       </div>
     </>

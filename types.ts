@@ -53,7 +53,7 @@ export interface ScriptBlock {
   ruStale?: boolean; // true when audioScript was edited after russianScript was generated
 }
 
-export type ProjectType = 'youtube' | 'documentary' | 'short_doc';
+export type ProjectType = 'short_doc';
 
 export interface SeoPackage {
   titles: string[];
@@ -131,7 +131,7 @@ export const INITIAL_STATE: SystemState = {
   isSteppable: true,
   stepStatus: 'IDLE',
   projectType: 'short_doc',
-  logs: ['> NARRATIVE.WAR INITIALIZED...', '> WAITING FOR TARGET VECTOR...'],
+  logs: ['> TECH.WAR INITIALIZED...', '> WAITING FOR TARGET VECTOR...'],
   history: [],
   showHistory: false
 };
